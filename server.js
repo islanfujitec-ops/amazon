@@ -13,6 +13,11 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('public'));
 
+// Rota raiz - servir index.html
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 console.log('âœ… TABULEIRO360 - API integrada com Amazon Associados');
 
 // Arquivo de dados
