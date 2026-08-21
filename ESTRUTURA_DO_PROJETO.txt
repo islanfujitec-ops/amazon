@@ -1,0 +1,270 @@
+📁 ESTRUTURA DO PROJETO
+═══════════════════════════════════════════════════════════════════════════════════
+
+price-monitor-games/
+│
+├── 📄 INICIAR.ps1 ............................ ✅ CLIQUE PARA COMEÇAR (Windows)
+├── 🐚 INICIAR.sh ............................. ✅ Para Mac/Linux
+│
+├── 📖 LEIA-ME-PRIMEIRO.txt ................... Guia de início rápido
+├── 📖 RESUMO_FINAL.txt ....................... Resumo completo e checklist
+├── 📖 COMO_USAR.md ........................... Instruções detalhadas
+├── 📖 README_PT.md ........................... Visão geral rápida
+├── 📖 INTEGRAR_WHATSAPP.md ................... Como integrar WhatsApp
+├── 📖 ESTRUTURA_DO_PROJETO.txt .............. Este arquivo
+│
+├── 🖥️ server.js ............................. Servidor Node.js
+│                                            (40 linhas, bem comentado)
+│
+├── 📁 public/
+│   └── 📄 index.html ........................ Interface web (4 abas)
+│                                            • Configurações
+│                                            • Marcas & Keywords
+│                                            • Monitorar
+│                                            • Histórico
+│
+├── 🔧 package.json .......................... Dependências npm
+│   └── express, axios, cheerio, node-cron
+│
+├── ⚙️ .env.local ............................ Variáveis de ambiente (opcional)
+│
+├── 💾 config.json ........................... Suas configurações (GERADO)
+│   └── Salvo automaticamente após cada mudança
+│
+├── 🚀 .claude/
+│   └── launch.json ......................... Config para preview local
+│
+└── 📋 node_modules/ ......................... Dependências instaladas (gerado)
+
+
+🎯 ARQUIVO MAIS IMPORTANTE:
+═══════════════════════════════════════════════════════════════════════════════════
+
+➜ INICIAR.ps1 (Windows) ou INICIAR.sh (Mac/Linux)
+
+   Clique 2x e PRONTO!
+   A ferramenta abre automaticamente em http://localhost:3000
+
+
+📊 TAMANHO DOS ARQUIVOS:
+═══════════════════════════════════════════════════════════════════════════════════
+
+├── server.js ................................ ~2 KB
+├── public/index.html ........................ ~30 KB
+├── Guias (.md, .txt) ....................... ~50 KB
+├── package.json ............................. ~1 KB
+└── node_modules/ ........................... ~200 MB (automático)
+
+
+🔧 CONFIGURAÇÕES SALVAS EM config.json:
+═══════════════════════════════════════════════════════════════════════════════════
+
+{
+  "amazonEmail": "seu@email.com",
+  "amazonPassword": "sua_senha",
+  "whatsappNumber": "5511987654321",
+  "frequency": 60,
+  "sendAlerts": true,
+  "brands": ["Asmodee", "Galápagos", "Devir", "GROK"],
+  "keywords": ["Brinquedos e jogos", "Jogos de tabuleiro"],
+  "products": [],
+  "priceHistory": [
+    {
+      "title": "Produto encontrado",
+      "price": 89.90,
+      "store": "Amazon.com.br",
+      "link": "https://amazon.com.br/...",
+      "timestamp": "2026-08-20T22:00:00.000Z"
+    }
+  ]
+}
+
+
+📡 API ENDPOINTS:
+═════════════════════════════════════════════════════════════════════════════════
+
+GET  http://localhost:3000/          ← Interface web
+GET  http://localhost:3000/api/config        ← Carregar config
+POST http://localhost:3000/api/config        ← Salvar config
+GET  http://localhost:3000/api/monitor       ← Executar busca
+GET  http://localhost:3000/api/history       ← Carregar histórico
+GET  http://localhost:3000/api/clear-history ← Limpar histórico
+
+
+🔄 COMO FUNCIONA:
+═════════════════════════════════════════════════════════════════════════════════
+
+1. INICIAR:
+   └─ Clique em INICIAR.ps1
+
+2. SERVIDOR INICIA:
+   └─ Node.js carrega server.js
+   └─ Express abre porta 3000
+   └─ Navegador abre http://localhost:3000
+
+3. INTERFACE CARREGA:
+   └─ HTML + CSS + JavaScript
+   └─ Carrega suas configurações de config.json
+   └─ Mostra 4 abas
+
+4. VOCÊ CONFIGURA:
+   └─ Email e senha Amazon
+   └─ Número WhatsApp
+   └─ Frequência
+   └─ Marcas e keywords
+   └─ Tudo salvo em config.json
+
+5. EXECUTA BUSCA:
+   └─ Clique "Buscar Agora"
+   └─ Server faz requisição para Amazon
+   └─ Cheerio faz parsing do HTML
+   └─ Mostra resultados em tempo real
+
+6. AUTOMÁTICO:
+   └─ node-cron agenda a tarefa
+   └─ A cada X tempo, executa busca
+   └─ Salva histórico
+   └─ Envia WhatsApp (se configurado)
+
+
+🚀 FLUXO DE DADOS:
+═════════════════════════════════════════════════════════════════════════════════
+
+Interface Web (browser)
+  ↓
+JavaScript (public/index.html)
+  ↓
+API Express (server.js)
+  ↓
+Web Scraper (Cheerio + Axios)
+  ↓
+Amazon.com.br / Amazon Global
+  ↓
+Parse HTML
+  ↓
+Salva em config.json
+  ↓
+Mostra na interface
+  ↓
+Envia WhatsApp (opcional)
+
+
+💾 O QUE É SALVO:
+═════════════════════════════════════════════════════════════════════════════════
+
+✓ Email Amazon (criptografado é recomendado)
+✓ Senha Amazon (criptografado é recomendado)
+✓ Número WhatsApp
+✓ Frequência configurada
+✓ Marcas adicionadas
+✓ Keywords adicionadas
+✓ Histórico de preços (últimos 100)
+✓ Timestamp de cada busca
+✓ Preços encontrados
+✓ Links de produtos
+✓ Lojas onde encontrou
+
+
+🔐 SEGURANÇA:
+═════════════════════════════════════════════════════════════════════════════════
+
+⚠️ IMPORTANTE:
+  • config.json fica LOCAL no seu PC
+  • Ninguém tem acesso (a menos que compartilhe o arquivo)
+  • Para segurança extra, use variáveis de ambiente
+  • Se der deploy na nuvem, use .env.local com secrets
+
+
+📈 HISTÓRICO DE PREÇOS:
+═════════════════════════════════════════════════════════════════════════════════
+
+A ferramenta salva:
+  ✓ Últimos 100 preços encontrados
+  ✓ Data e hora exata
+  ✓ Loja onde encontrou
+  ✓ Link direto
+  ✓ Preço
+
+Você pode:
+  ✓ Ver tabela com tudo
+  ✓ Exportar histórico (manual: copiar do JSON)
+  ✓ Limpar histórico (botão vermelho)
+
+
+⚙️ CONFIGURAÇÕES PERSONALIZÁVEIS:
+═════════════════════════════════════════════════════════════════════════════════
+
+Frequência:
+  • 5 minutos (muito frequente, Amazon pode bloquear)
+  • 15 minutos
+  • 30 minutos
+  • 1 hora (RECOMENDADO)
+  • 3 horas
+  • 6 horas
+  • 12 horas (uma vez por dia)
+
+Marcas: ILIMITADAS
+  • Adicione quantas quiser
+  • Remova quando desejar
+
+Keywords: ILIMITADAS
+  • Customize suas buscas
+  • Combine com marcas
+
+WhatsApp: ON/OFF
+  • Ative ou desative alertas
+  • Mude número a qualquer hora
+
+
+🎨 TECNOLOGIA POR ARQUIVO:
+═════════════════════════════════════════════════════════════════════════════════
+
+server.js:
+  • Node.js runtime
+  • Express.js (framework web)
+  • node-cron (agendador)
+  • Axios (requisições HTTP)
+  • Cheerio (web scraping)
+  • File System (guardar config.json)
+
+public/index.html:
+  • HTML5 semântico
+  • CSS3 Grid + Flexbox
+  • JavaScript vanilla (ES6+)
+  • Fetch API (requisições)
+  • LocalStorage (cache opcional)
+
+package.json:
+  • Metadados do projeto
+  • Scripts de inicialização
+  • Dependências e versões
+
+
+🚀 PRÓXIMAS VERSÕES POSSÍVEIS:
+═════════════════════════════════════════════════════════════════════════════════
+
+v1.1:
+  • Login simples
+  • Banco de dados Supabase
+  • Deploy em nuvem
+
+v1.2:
+  • Gráficos de histórico
+  • Alertas de queda de preço
+  • Múltiplas contas WhatsApp
+
+v2.0:
+  • Integração com mais lojas
+  • Dashboard com analytics
+  • API pública
+
+
+═════════════════════════════════════════════════════════════════════════════════
+
+                    ESTRUTURA SIMPLES E EFICIENTE
+
+          O arquivo server.js é pequeno e bem organizado.
+         A interface é em um único arquivo HTML (fácil manutenção).
+         Tudo funciona local, sem dependências externas complexas.
+
+═════════════════════════════════════════════════════════════════════════════════
