@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const cron = require('node-cron');
@@ -13,12 +13,12 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('public'));
 
-console.log('✅ TABULEIRO360 - API integrada com Amazon Associados');
+console.log('âœ… TABULEIRO360 - API integrada com Amazon Associados');
 
 // Arquivo de dados
 const dataFile = path.join(__dirname, 'config.json');
 
-// Carregar configurações
+// Carregar configuraÃ§Ãµes
 function loadConfig() {
   if (fs.existsSync(dataFile)) {
     return JSON.parse(fs.readFileSync(dataFile, 'utf8'));
@@ -30,14 +30,14 @@ function loadConfig() {
     frequency: 60,
     keywords: [
       'Brinquedos e jogos',
-      'Jogos e acessórios',
+      'Jogos e acessÃ³rios',
       'Jogos de tabuleiro',
-      'Jogos de cartas Colecionáveis',
-      'Cartas colecionáveis'
+      'Jogos de cartas ColecionÃ¡veis',
+      'Cartas colecionÃ¡veis'
     ],
     brands: [
       'Asmodee',
-      'Galápagos',
+      'GalÃ¡pagos',
       'Mepple BR',
       'Copag',
       'Devir',
@@ -56,7 +56,7 @@ function loadConfig() {
       'GAMEGENIC',
       'Paper games',
       'Martel',
-      'POKÉMON',
+      'POKÃ‰MON',
       'LORCANA',
       'Chip theory games',
       'Eagle Games',
@@ -70,7 +70,7 @@ function loadConfig() {
   };
 }
 
-// Salvar configurações
+// Salvar configuraÃ§Ãµes
 function saveConfig(config) {
   fs.writeFileSync(dataFile, JSON.stringify(config, null, 2));
 }
@@ -119,9 +119,9 @@ async function searchAmazonBrazil(query) {
 // Enviar WhatsApp
 async function sendWhatsAppAlert(phoneNumber, message) {
   try {
-    // Integração com sua API WhatsApp
+    // IntegraÃ§Ã£o com sua API WhatsApp
     // Exemplo usando Evolution API
-    console.log(`📱 [Simulado] WhatsApp para ${phoneNumber}:`);
+    console.log(`ðŸ“± [Simulado] WhatsApp para ${phoneNumber}:`);
     console.log(message);
     return { success: true };
   } catch (error) {
@@ -130,16 +130,16 @@ async function sendWhatsAppAlert(phoneNumber, message) {
   }
 }
 
-// Monitorar preços
+// Monitorar preÃ§os
 async function monitorPrices() {
   const config = loadConfig();
 
   if (!config.brands.length && !config.keywords.length) {
-    console.log('❌ Nenhuma marca ou palavra-chave configurada');
+    console.log('âŒ Nenhuma marca ou palavra-chave configurada');
     return;
   }
 
-  console.log(`\n🔍 Buscando preços... (${new Date().toLocaleTimeString()})`);
+  console.log(`\nðŸ” Buscando preÃ§os... (${new Date().toLocaleTimeString()})`);
 
   const allResults = [];
   const searchTerms = [...config.brands, ...config.keywords];
@@ -147,7 +147,7 @@ async function monitorPrices() {
   for (const term of searchTerms) {
     const results = await searchAmazonBrazil(term);
     allResults.push(...results);
-    console.log(`✅ ${term}: ${results.length} produtos encontrados`);
+    console.log(`âœ… ${term}: ${results.length} produtos encontrados`);
   }
 
   // Remover duplicatas
@@ -155,7 +155,7 @@ async function monitorPrices() {
     new Map(allResults.map(item => [item.link, item])).values()
   );
 
-  // Salvar histórico
+  // Salvar histÃ³rico
   config.priceHistory.push(...uniqueResults.map(p => ({
     ...p,
     timestamp: new Date().toISOString()
@@ -164,19 +164,19 @@ async function monitorPrices() {
   // Enviar alerta WhatsApp se configurado
   if (config.sendAlerts && config.whatsappNumber && uniqueResults.length > 0) {
     const topProducts = uniqueResults.slice(0, 3);
-    let message = `🎲 *Produtos Encontrados*\n\n`;
+    let message = `ðŸŽ² *Produtos Encontrados*\n\n`;
     topProducts.forEach((p, i) => {
       message += `${i + 1}. *${p.title.substring(0, 50)}*\n`;
-      message += `💰 R$ ${p.price.toFixed(2)}\n`;
-      message += `🔗 ${p.link}\n\n`;
+      message += `ðŸ’° R$ ${p.price.toFixed(2)}\n`;
+      message += `ðŸ”— ${p.link}\n\n`;
     });
-    message += `Horário: ${new Date().toLocaleTimeString()}`;
+    message += `HorÃ¡rio: ${new Date().toLocaleTimeString()}`;
 
     await sendWhatsAppAlert(config.whatsappNumber, message);
   }
 
   saveConfig(config);
-  console.log(`✅ Monitoramento concluído: ${uniqueResults.length} produtos`);
+  console.log(`âœ… Monitoramento concluÃ­do: ${uniqueResults.length} produtos`);
 
   return uniqueResults;
 }
@@ -210,14 +210,14 @@ app.get('/api/clear-history', (req, res) => {
   res.json({ success: true });
 });
 
-// 🎯 ROTAS DA API AMAZON ASSOCIADOS
+// ðŸŽ¯ ROTAS DA API AMAZON ASSOCIADOS
 
 app.post('/api/amazon/search', async (req, res) => {
   try {
     const { keywords, limit } = req.body;
 
     if (!keywords) {
-      return res.json({ success: false, error: 'Keywords obrigatório' });
+      return res.json({ success: false, error: 'Keywords obrigatÃ³rio' });
     }
 
     const results = await searchAmazonProducts(keywords, limit || 10);
@@ -241,13 +241,13 @@ app.post('/api/amazon/product', async (req, res) => {
     const { asin } = req.body;
 
     if (!asin) {
-      return res.json({ success: false, error: 'ASIN obrigatório' });
+      return res.json({ success: false, error: 'ASIN obrigatÃ³rio' });
     }
 
     const product = await getProductByASIN(asin);
 
     if (!product) {
-      return res.json({ success: false, error: 'Produto não encontrado' });
+      return res.json({ success: false, error: 'Produto nÃ£o encontrado' });
     }
 
     res.json({ success: true, product });
@@ -264,12 +264,12 @@ app.get('/api/amazon/status', (req, res) => {
   res.json({
     success: true,
     credentials_configured: !!hasCredentials,
-    partner_tag: process.env.AMAZON_PARTNER_TAG || 'não configurado',
+    partner_tag: process.env.AMAZON_PARTNER_TAG || 'nÃ£o configurado',
     marketplace: process.env.AMAZON_MARKETPLACE || 'BR'
   });
 });
 
-// 🎯 MELHORES PREÇOS - Endpoint para listar produtos com melhores preços
+// ðŸŽ¯ MELHORES PREÃ‡OS - Endpoint para listar produtos com melhores preÃ§os
 app.get('/api/best-prices', async (req, res) => {
   try {
     const config = loadConfig();
@@ -278,14 +278,14 @@ app.get('/api/best-prices', async (req, res) => {
       return res.json({ bestPrices: [] });
     }
 
-    // Ordenar por preço e pegar os melhores
+    // Ordenar por preÃ§o e pegar os melhores
     const bestPrices = config.products
       .sort((a, b) => {
         const priceA = parseFloat(a.price.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
         const priceB = parseFloat(b.price.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
         return priceA - priceB;
       })
-      .slice(0, 10) // Top 10 melhores preços
+      .slice(0, 10) // Top 10 melhores preÃ§os
       .map(p => ({
         ...p,
         affiliate_url: `https://www.amazon.com.br/dp/${p.asin}?tag=${process.env.AMAZON_PARTNER_TAG || 'tainadadecio-20'}`
@@ -297,7 +297,7 @@ app.get('/api/best-prices', async (req, res) => {
   }
 });
 
-// 📱 ENVIAR WHATSAPP - Enviar melhores preços
+// ðŸ“± ENVIAR WHATSAPP - Enviar melhores preÃ§os
 app.post('/api/send-best-prices', async (req, res) => {
   try {
     const { whatsapp } = req.body;
@@ -315,22 +315,22 @@ app.post('/api/send-best-prices', async (req, res) => {
       })
       .slice(0, 5);
 
-    let message = '🎲 *MELHORES PREÇOS ENCONTRADOS - TABULEIRO360*\n\n';
+    let message = 'ðŸŽ² *MELHORES PREÃ‡OS ENCONTRADOS - TABULEIRO360*\n\n';
     message += `_Atualizados em ${new Date().toLocaleString('pt-BR')}_\n\n`;
 
     bestPrices.forEach((product, index) => {
       const affiliate_url = `https://www.amazon.com.br/dp/${product.asin}?tag=${process.env.AMAZON_PARTNER_TAG || 'tainadadecio-20'}`;
       message += `*${index + 1}. ${product.title}*\n`;
-      message += `💰 *R$ ${product.price}*\n`;
-      message += `🔗 ${affiliate_url}\n\n`;
+      message += `ðŸ’° *R$ ${product.price}*\n`;
+      message += `ðŸ”— ${affiliate_url}\n\n`;
     });
 
-    message += '_Clique nos links para comprar com seu afiliado! 💸_';
+    message += '_Clique nos links para comprar com seu afiliado! ðŸ’¸_';
 
     // Gerar link WhatsApp
     const whatsappLink = `https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}`;
 
-    console.log(`📱 Mensagem de promoção gerada para ${whatsapp}`);
+    console.log(`ðŸ“± Mensagem de promoÃ§Ã£o gerada para ${whatsapp}`);
 
     res.json({
       success: true,
@@ -343,7 +343,7 @@ app.post('/api/send-best-prices', async (req, res) => {
   }
 });
 
-// 📱 ENVIAR PRODUTO INDIVIDUAL
+// ðŸ“± ENVIAR PRODUTO INDIVIDUAL
 app.post('/api/send-product-whatsapp', async (req, res) => {
   try {
     const { asin, whatsapp } = req.body;
@@ -351,20 +351,20 @@ app.post('/api/send-product-whatsapp', async (req, res) => {
 
     const product = config.products.find(p => p.asin === asin);
     if (!product) {
-      return res.json({ success: false, error: 'Produto não encontrado' });
+      return res.json({ success: false, error: 'Produto nÃ£o encontrado' });
     }
 
     const affiliate_url = `https://www.amazon.com.br/dp/${product.asin}?tag=${process.env.AMAZON_PARTNER_TAG || 'tainadadecio-20'}`;
 
-    let message = '🎲 *OFERTA ESPECIAL - TABULEIRO360*\n\n';
+    let message = 'ðŸŽ² *OFERTA ESPECIAL - TABULEIRO360*\n\n';
     message += `*${product.title}*\n\n`;
-    message += `💰 *R$ ${product.price}*\n\n`;
-    message += `🔗 COMPRAR: ${affiliate_url}\n\n`;
-    message += '_Aproveite! 🎯_';
+    message += `ðŸ’° *R$ ${product.price}*\n\n`;
+    message += `ðŸ”— COMPRAR: ${affiliate_url}\n\n`;
+    message += '_Aproveite! ðŸŽ¯_';
 
     const whatsappLink = `https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}`;
 
-    console.log(`📱 Produto ${asin} - Mensagem gerada para ${whatsapp}`);
+    console.log(`ðŸ“± Produto ${asin} - Mensagem gerada para ${whatsapp}`);
 
     res.json({
       success: true,
@@ -378,8 +378,8 @@ app.post('/api/send-product-whatsapp', async (req, res) => {
 
 // Iniciar servidor
 app.listen(PORT, () => {
-  console.log(`\n🚀 Price Monitor rodando em http://localhost:${PORT}`);
-  console.log(`📊 Dashboard: http://localhost:${PORT}\n`);
+  console.log(`\nðŸš€ Price Monitor rodando em http://localhost:${PORT}`);
+  console.log(`ðŸ“Š Dashboard: http://localhost:${PORT}\n`);
 
   // Carregar config
   const config = loadConfig();
@@ -387,10 +387,11 @@ app.listen(PORT, () => {
   // Agendar monitoramento
   if (config.frequency > 0) {
     const cronExpression = `*/${config.frequency} * * * *`;
-    console.log(`⏱️ Monitoramento agendado a cada ${config.frequency} minuto(s)`);
+    console.log(`â±ï¸ Monitoramento agendado a cada ${config.frequency} minuto(s)`);
 
     cron.schedule(cronExpression, () => {
       monitorPrices();
     });
   }
 });
+
