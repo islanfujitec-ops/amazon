@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TABULEIRO360 - Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+
+        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }
+
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center; }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        .header p { opacity: 0.9; font-size: 1.1em; }
+
+        .tabs { display: flex; border-bottom: 2px solid #f0f0f0; background: #fafafa; }
+        .tab-btn { flex: 1; padding: 18px; text-align: center; border: none; background: transparent; cursor: pointer; font-size: 1em; font-weight: 500; color: #666; transition: all 0.3s; }
+        .tab-btn:hover { background: #f0f0f0; }
+        .tab-btn.active { color: #667eea; border-bottom: 3px solid #667eea; background: white; }
+
+        .content { padding: 40px; }
+        .tab-content { display: none; animation: fadeIn 0.3s; }
+        .tab-content.active { display: block; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .form-group { margin-bottom: 25px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #333; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1em; }
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 1em; cursor: pointer; transition: all 0.3s; font-weight: 600; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5568d3; transform: translateY(-2px); }
+        .btn-success { background: #48bb78; color: white; }
+        .btn-success:hover { background: #38a169; }
+        .btn-danger { background: #f56565; color: white; }
+        .btn-danger:hover { background: #e53e3e; }
+
+        .status-box { background: #f0f7ff; border-left: 4px solid #667eea; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .status-box.success { background: #f0fdf4; border-left-color: #48bb78; }
+        .status-box h3 { color: #333; margin-bottom: 8px; }
+        .status-box p { color: #666; }
+
+        .product-card { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 15px; }
+        .product-card h4 { margin-bottom: 10px; color: #333; }
+        .product-card p { color: #666; margin-bottom: 10px; }
+        .product-price { font-size: 1.5em; font-weight: bold; color: #48bb78; margin: 10px 0; }
+        .product-btn { background: #667eea; color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; margin-top: 10px; }
+        .product-btn:hover { background: #5568d3; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+
+        .info-box { background: #f0f7ff; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+        .info-box strong { color: #667eea; }
+
+        .success-msg { background: #c6f6d5; color: #22543d; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
+        .error-msg { background: #fed7d7; color: #742a2a; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
+
+        .loading { display: none; text-align: center; padding: 40px; }
+        .loading::after { content: '⏳ Carregando...'; font-size: 1.2em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎲 TABULEIRO360</h1>
+            <p>Monitor Automático de Preços - Dashboard</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('settings')">⚙️ Configurações</button>
+            <button class="tab-btn" onclick="switchTab('brands')">🏷️ Marcas & Keywords</button>
+            <button class="tab-btn" onclick="switchTab('monitor')">📊 Monitor</button>
+            <button class="tab-btn" onclick="switchTab('history')">📜 Histórico</button>
+            <button class="tab-btn" onclick="switchTab('promocionar')">📢 Promocionar</button>
+        </div>
+
+        <div class="content">
+            <!-- ABA 1: CONFIGURAÇÕES -->
+            <div id="settings" class="tab-content active">
+                <h2>⚙️ Configurações</h2>
+                <div id="settingsMsg"></div>
+
+                <div class="form-group">
+                    <label>📱 Número WhatsApp</label>
+                    <input type="text" id="whatsappNumber" placeholder="55XXXXXXXXXX" value="">
+                    <small>Formato: 55 + DDD + Número (ex: 5585987654321)</small>
+                </div>
+
+                <div class="form-group">
+                    <label>⏱️ Frequência de Envio (minutos)</label>
+                    <select id="frequency">
+                        <option value="5">5 minutos</option>
+                        <option value="15">15 minutos</option>
+                        <option value="30">30 minutos</option>
+                        <option value="60" selected>1 hora</option>
+                        <option value="120">2 horas</option>
+                        <option value="360">6 horas</option>
+                        <option value="720">12 horas</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="autoSend" checked>
+                        ✅ Ativar Envio Automático
+                    </label>
+                    <small>Quando ativado, envia automaticamente nos intervalos configurados</small>
+                </div>
+
+                <button class="btn btn-primary" onclick="saveSettings()">💾 Salvar Configurações</button>
+
+                <div style="margin-top: 30px;">
+                    <h3>📋 Status do Sistema</h3>
+                    <div class="status-box success" id="systemStatus">
+                        <h3>✅ Sistema Online</h3>
+                        <p>API funcionando corretamente</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ABA 2: MARCAS & KEYWORDS -->
+            <div id="brands" class="tab-content">
+                <h2>🏷️ Marcas & Keywords Configuradas</h2>
+
+                <div class="info-box">
+                    <strong>27 Marcas:</strong> Asmodee, Galápagos, Mepple BR, Copag, Devir, GROK, CNMON, Jelly monster, Rio grande Games, Caos tome games, Across the board, RAVENSBURG, MARVEL, AWAKEN REALMS, STONEMAIER GAMES, MANDALA, Gmt games, GAMEGENIC, Paper games, Martel, POKÉMON, LORCANA, Chip theory games, Eagle Games, Fantasy Flight Games, WISE WIZARD GAMES, LA BOITE DE JEU
+                </div>
+
+                <div class="info-box">
+                    <strong>5 Keywords:</strong> Brinquedos e jogos, Jogos e acessórios, Jogos de tabuleiro, Jogos de cartas Colecionáveis, Cartas colecionáveis
+                </div>
+
+                <div style="margin-top: 30px;">
+                    <h3>✏️ Adicionar Nova Marca</h3>
+                    <div class="form-group">
+                        <input type="text" id="newBrand" placeholder="Digite o nome da marca">
+                    </div>
+                    <button class="btn btn-primary" onclick="addBrand()">➕ Adicionar Marca</button>
+                </div>
+
+                <div style="margin-top: 30px;">
+                    <h3>✏️ Adicionar Nova Keyword</h3>
+                    <div class="form-group">
+                        <input type="text" id="newKeyword" placeholder="Digite a palavra-chave">
+                    </div>
+                    <button class="btn btn-primary" onclick="addKeyword()">➕ Adicionar Keyword</button>
+                </div>
+            </div>
+
+            <!-- ABA 3: MONITOR -->
+            <div id="monitor" class="tab-content">
+                <h2>📊 Monitor de Preços</h2>
+                <button class="btn btn-success" onclick="monitorPrices()">🔍 Buscar Preços Agora</button>
+
+                <div id="monitorResult" class="loading"></div>
+            </div>
+
+            <!-- ABA 4: HISTÓRICO -->
+            <div id="history" class="tab-content">
+                <h2>📜 Histórico de Preços</h2>
+                <button class="btn btn-danger" onclick="clearHistory()">🗑️ Limpar Histórico</button>
+
+                <div id="historyList" style="margin-top: 20px;">
+                    <p>Carregando histórico...</p>
+                </div>
+            </div>
+
+            <!-- ABA 5: PROMOCIONAR -->
+            <div id="promocionar" class="tab-content">
+                <h2>📢 Promocionar - Melhores Preços</h2>
+
+                <div class="status-box">
+                    <h3>🎯 Enviar Melhores Preços</h3>
+                    <p>Detecta automaticamente os 5 melhores preços e envia para seu WhatsApp com seu link de afiliado.</p>
+                </div>
+
+                <button class="btn btn-success" style="width: 100%; padding: 15px; font-size: 1.1em; margin-bottom: 20px;" onclick="sendBestPrices()">📤 Enviar Melhores Preços AGORA</button>
+
+                <div id="bestPricesResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Carregar configurações ao iniciar
+        window.onload = function() {
+            loadConfig();
+            loadHistory();
+        };
+
+        function switchTab(tabName) {
+            // Esconder todas as abas
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+
+            // Mostrar aba selecionada
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function loadConfig() {
+            fetch('/api/config')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.whatsappNumber) document.getElementById('whatsappNumber').value = data.whatsappNumber;
+                    if (data.frequency) document.getElementById('frequency').value = data.frequency;
+                    document.getElementById('autoSend').checked = data.sendAlerts !== false;
+                });
+        }
+
+        function saveSettings() {
+            const config = {
+                whatsappNumber: document.getElementById('whatsappNumber').value,
+                frequency: parseInt(document.getElementById('frequency').value),
+                sendAlerts: document.getElementById('autoSend').checked
+            };
+
+            fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) })
+                .then(r => r.json())
+                .then(data => {
+                    showMsg('settingsMsg', '✅ Configurações salvas com sucesso!', 'success');
+                    setTimeout(() => location.reload(), 1500);
+                });
+        }
+
+        function monitorPrices() {
+            document.getElementById('monitorResult').innerHTML = '<p style="text-align: center; padding: 40px;">⏳ Buscando preços...</p>';
+
+            fetch('/api/monitor')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.results && data.results.length > 0) {
+                        let html = `<div class="status-box success"><h3>✅ ${data.results.length} produtos encontrados!</h3></div>`;
+                        data.results.slice(0, 10).forEach((p, i) => {
+                            html += `<div class="product-card">
+                                <h4>${i+1}. ${p.title}</h4>
+                                <p>Loja: ${p.store}</p>
+                                <div class="product-price">R$ ${p.price.toFixed(2)}</div>
+                                <a href="${p.link}" target="_blank" class="product-btn">🔗 Ver no Amazon</a>
+                            </div>`;
+                        });
+                        document.getElementById('monitorResult').innerHTML = html;
+                    } else {
+                        document.getElementById('monitorResult').innerHTML = '<div class="status-box"><p>❌ Nenhum produto encontrado. Configure as marcas e keywords.</p></div>';
+                    }
+                });
+        }
+
+        function loadHistory() {
+            fetch('/api/history')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.length > 0) {
+                        let html = '';
+                        data.slice(-20).reverse().forEach(p => {
+                            html += `<div class="product-card">
+                                <h4>${p.title}</h4>
+                                <div class="product-price">R$ ${p.price.toFixed(2)}</div>
+                                <small>🕐 ${new Date(p.timestamp).toLocaleString('pt-BR')}</small>
+                            </div>`;
+                        });
+                        document.getElementById('historyList').innerHTML = html;
+                    } else {
+                        document.getElementById('historyList').innerHTML = '<p>Nenhum histórico disponível</p>';
+                    }
+                });
+        }
+
+        function clearHistory() {
+            if (confirm('Tem certeza que deseja limpar o histórico?')) {
+                fetch('/api/clear-history')
+                    .then(r => r.json())
+                    .then(data => {
+                        loadHistory();
+                        alert('✅ Histórico limpo!');
+                    });
+            }
+        }
+
+        function sendBestPrices() {
+            const whatsapp = document.getElementById('whatsappNumber').value || '5585999999999';
+
+            if (!whatsapp || whatsapp.length < 11) {
+                alert('❌ Configure um número WhatsApp válido nas Configurações!');
+                return;
+            }
+
+            fetch('/api/send-best-prices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ whatsapp })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    let html = `<div class="status-box success"><h3>✅ ${data.count} melhores preços encontrados!</h3>
+                        <p><strong>Clique no link abaixo para enviar no WhatsApp:</strong></p>
+                        <a href="${data.whatsappLink}" target="_blank" class="btn btn-success" style="display: inline-block; margin-top: 10px;">📱 Abrir WhatsApp</a>
+                    </div>`;
+                    document.getElementById('bestPricesResult').innerHTML = html;
+                } else {
+                    alert('❌ ' + data.error);
+                }
+            });
+        }
+
+        function showMsg(id, msg, type) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.innerHTML = msg;
+            el.style.display = 'block';
+            el.className = type === 'success' ? 'success-msg' : 'error-msg';
+        }
+
+        function addBrand() {
+            alert('Recurso em desenvolvimento');
+        }
+
+        function addKeyword() {
+            alert('Recurso em desenvolvimento');
+        }
+    </script>
+</body>
+</html>
