@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TABULEIRO360 - Login</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 50px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .login-container img {
+            max-width: 150px;
+            height: auto;
+            margin-bottom: 30px;
+            border-radius: 10px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .error-msg {
+            background: #fed7d7;
+            color: #742a2a;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .info-box {
+            background: #f0f7ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: left;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <img src="logo.jpg" alt="TABULEIRO360">
+        <h1>🎲 TABULEIRO360</h1>
+        <p class="subtitle">Monitor de Preços</p>
+
+        <div class="error-msg" id="errorMsg"></div>
+
+        <form onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label>👤 Usuário</label>
+                <input type="text" id="username" placeholder="admin" required>
+            </div>
+
+            <div class="form-group">
+                <label>🔐 Senha</label>
+                <input type="password" id="password" placeholder="••••••" required>
+            </div>
+
+            <button type="submit" class="btn-login">🚀 Entrar</button>
+            <div class="loading" id="loading">⏳ Verificando...</div>
+        </form>
+
+        <div class="info-box">
+            <strong>Credenciais Padrão:</strong><br>
+            Usuário: <code>admin</code><br>
+            Senha: <code>admin</code>
+        </div>
+    </div>
+
+    <script>
+        function handleLogin(event) {
+            event.preventDefault();
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            document.getElementById('loading').style.display = 'block';
+
+            // Enviar credenciais para o servidor
+            fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+
+                if (data.success) {
+                    // Salvar token no localStorage
+                    localStorage.setItem('auth_token', data.token);
+
+                    // Redirecionar para dashboard
+                    setTimeout(() => {
+                        window.location.href = '/dashboard.html';
+                    }, 500);
+                } else {
+                    const errorMsg = document.getElementById('errorMsg');
+                    errorMsg.textContent = '❌ ' + (data.error || 'Credenciais inválidas');
+                    errorMsg.style.display = 'block';
+                }
+            })
+            .catch(err => {
+                document.getElementById('loading').style.display = 'none';
+                const errorMsg = document.getElementById('errorMsg');
+                errorMsg.textContent = '❌ Erro ao conectar';
+                errorMsg.style.display = 'block';
+            });
+        }
+
+        // Se já está logado, redirecionar para dashboard
+        window.onload = function() {
+            if (localStorage.getItem('auth_token')) {
+                window.location.href = '/dashboard.html';
+            }
+        };
+    </script>
+</body>
+</html>

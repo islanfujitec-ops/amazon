@@ -4,14 +4,51 @@ const cheerio = require('cheerio');
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { searchAmazonProducts, getProductByASIN } = require('./lib/amazonApi');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Credenciais padrão (pode mudar depois)
+const DEFAULT_USERNAME = 'admin';
+const DEFAULT_PASSWORD = 'admin';
+const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 horas
+
 // Middleware
 app.use(express.json());
 app.use(express.static('public'));
+
+// Middleware de autenticação
+const requireAuth = (req, res, next) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+
+  if (!token || !isValidToken(token)) {
+    return res.status(401).json({ error: 'Não autorizado' });
+  }
+
+  next();
+};
+
+// Gerar token JWT simples
+function generateToken(username) {
+  const payload = {
+    username,
+    iat: Date.now(),
+    exp: Date.now() + SESSION_DURATION
+  };
+  return Buffer.from(JSON.stringify(payload)).toString('base64');
+}
+
+// Validar token
+function isValidToken(token) {
+  try {
+    const payload = JSON.parse(Buffer.from(token, 'base64').toString());
+    return payload.exp > Date.now();
+  } catch {
+    return false;
+  }
+}
 
 // Rota raiz - servir index.html
 app.get('/', (req, res) => {
@@ -233,6 +270,30 @@ async function monitorPrices() {
 
   return uniqueResults;
 }
+
+// 🔐 LOGIN
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+
+  if (username === DEFAULT_USERNAME && password === DEFAULT_PASSWORD) {
+    const token = generateToken(username);
+    res.json({
+      success: true,
+      token,
+      message: 'Login realizado com sucesso!'
+    });
+  } else {
+    res.status(401).json({
+      success: false,
+      error: 'Usuário ou senha incorretos'
+    });
+  }
+});
+
+// Logout (opcional)
+app.post('/api/logout', (req, res) => {
+  res.json({ success: true, message: 'Logout realizado' });
+});
 
 // APIs
 app.get('/api/config', (req, res) => {

@@ -65,7 +65,10 @@
 <body>
     <div class="container">
         <div class="header">
-            <img src="logo.jpg" alt="TABULEIRO360" style="max-width: 200px; height: auto; margin-bottom: 20px; border-radius: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 20px;">
+                <img src="logo.jpg" alt="TABULEIRO360" style="max-width: 150px; height: auto; border-radius: 15px;">
+                <button class="btn btn-danger" onclick="logout()" style="padding: 8px 16px; font-size: 0.9em;">🚪 Sair</button>
+            </div>
             <h1>🎲 TABULEIRO360</h1>
             <p>Monitor Automático de Preços - Dashboard</p>
         </div>
@@ -85,9 +88,14 @@
                 <div id="settingsMsg"></div>
 
                 <div class="form-group">
-                    <label>📱 Número WhatsApp</label>
-                    <input type="text" id="whatsappNumber" placeholder="55XXXXXXXXXX" value="">
-                    <small>Formato: 55 + DDD + Número (ex: 5585987654321)</small>
+                    <label>📱 WhatsApp - Número ou Grupo</label>
+                    <input type="text" id="whatsappNumber" placeholder="Número: 55XXXXXXXXXX ou Link: https://chat.whatsapp.com/XXXXX" value="">
+                    <small>Número (55XXXXXXXXXX) ou Link do Grupo (chat.whatsapp.com/...)</small>
+                </div>
+
+                <div style="background: #f0f7ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #667eea;">
+                    <h4 style="color: #667eea; margin-bottom: 10px;">📱 QR Code WhatsApp (Em Breve)</h4>
+                    <p style="color: #666; font-size: 0.9em;">Em breve você poderá ler QR code do WhatsApp Web para conectar diretamente.</p>
                 </div>
 
                 <div class="form-group">
@@ -192,11 +200,26 @@
     </div>
 
     <script>
-        // Carregar configurações ao iniciar
+        // Verificar autenticação ao iniciar
         window.onload = function() {
+            checkAuth();
             loadConfig();
             loadHistory();
         };
+
+        function checkAuth() {
+            const token = localStorage.getItem('auth_token');
+            if (!token) {
+                window.location.href = '/login.html';
+            }
+        }
+
+        function logout() {
+            if (confirm('Tem certeza que deseja sair?')) {
+                localStorage.removeItem('auth_token');
+                window.location.href = '/login.html';
+            }
+        }
 
         function switchTab(tabName) {
             // Esconder todas as abas
