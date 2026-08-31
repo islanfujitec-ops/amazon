@@ -78,7 +78,6 @@
             <button class="tab-btn" onclick="switchTab('brands')">🏷️ Marcas & Keywords</button>
             <button class="tab-btn" onclick="switchTab('monitor')">📊 Monitor</button>
             <button class="tab-btn" onclick="switchTab('history')">📜 Histórico</button>
-            <button class="tab-btn" onclick="switchTab('promocionar')">📢 Promocionar</button>
         </div>
 
         <div class="content">
@@ -177,8 +176,14 @@
             <!-- ABA 3: MONITOR -->
             <div id="monitor" class="tab-content">
                 <h2>📊 Monitor de Preços</h2>
-                <button class="btn btn-success" onclick="monitorPrices()">🔍 Buscar Preços Agora</button>
+                <p style="color: #666; margin-bottom: 15px;">Busque os produtos e envie os melhores preços direto no seu WhatsApp, com seu link de afiliado.</p>
 
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
+                    <button class="btn btn-primary" onclick="monitorPrices()">🔍 Buscar Preços Agora</button>
+                    <button class="btn btn-success" onclick="sendBestPrices()">📤 Enviar Top 5 no WhatsApp</button>
+                </div>
+
+                <div id="bestPricesResult"></div>
                 <div id="monitorResult" class="loading"></div>
             </div>
 
@@ -190,20 +195,6 @@
                 <div id="historyList" style="margin-top: 20px;">
                     <p>Carregando histórico...</p>
                 </div>
-            </div>
-
-            <!-- ABA 5: PROMOCIONAR -->
-            <div id="promocionar" class="tab-content">
-                <h2>📢 Promocionar - Melhores Preços</h2>
-
-                <div class="status-box">
-                    <h3>🎯 Enviar Melhores Preços</h3>
-                    <p>Detecta automaticamente os 5 melhores preços e envia para seu WhatsApp com seu link de afiliado.</p>
-                </div>
-
-                <button class="btn btn-success" style="width: 100%; padding: 15px; font-size: 1.1em; margin-bottom: 20px;" onclick="sendBestPrices()">📤 Enviar Melhores Preços AGORA</button>
-
-                <div id="bestPricesResult"></div>
             </div>
         </div>
     </div>
@@ -232,13 +223,25 @@
         }
 
         function switchTab(tabName) {
-            // Esconder todas as abas
+            switchTabByName(tabName, event && event.target);
+        }
+
+        function switchTabByName(tabName, btnEl) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
 
-            // Mostrar aba selecionada
             document.getElementById(tabName).classList.add('active');
-            event.target.classList.add('active');
+
+            if (btnEl) {
+                btnEl.classList.add('active');
+            } else {
+                // Achar o botão da aba pelo onclick correspondente
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                    if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(`'${tabName}'`)) {
+                        btn.classList.add('active');
+                    }
+                });
+            }
         }
 
         function loadConfig() {
@@ -346,30 +349,49 @@
         }
 
         function sendBestPrices() {
-            const whatsapp = document.getElementById('whatsappNumber').value || '5585999999999';
+            fetch('/api/config')
+                .then(r => r.json())
+                .then(cfg => {
+                    const whatsapp = (cfg.whatsappNumber || '').trim();
+                    const digits = whatsapp.replace(/\D/g, '');
 
-            if (!whatsapp || whatsapp.length < 11) {
-                alert('❌ Configure um número WhatsApp válido nas Configurações!');
-                return;
-            }
+                    if (digits.length < 12) {
+                        alert('❌ Configure um número WhatsApp válido (+55DDNúmero) na aba Configurações!');
+                        switchTabByName('settings');
+                        return;
+                    }
 
-            fetch('/api/send-best-prices', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ whatsapp })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    let html = `<div class="status-box success"><h3>✅ ${data.count} melhores preços encontrados!</h3>
-                        <p><strong>Clique no link abaixo para enviar no WhatsApp:</strong></p>
-                        <a href="${data.whatsappLink}" target="_blank" class="btn btn-success" style="display: inline-block; margin-top: 10px;">📱 Abrir WhatsApp</a>
-                    </div>`;
-                    document.getElementById('bestPricesResult').innerHTML = html;
-                } else {
-                    alert('❌ ' + data.error);
-                }
-            });
+                    fetch('/api/send-best-prices', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ whatsapp })
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (!data.success) {
+                            alert('❌ ' + data.error);
+                            return;
+                        }
+
+                        let html = `<div class="status-box success"><h3>✅ ${data.count} melhores preços prontos!</h3>
+                            <a href="${data.whatsappLink}" target="_blank" class="btn btn-success" style="display:block; text-align:center; padding:15px; font-size:1.1em; margin:15px 0;">📱 Enviar no WhatsApp (+${digits})</a>
+                        </div>`;
+
+                        (data.products || []).forEach((p, i) => {
+                            html += `<div class="product-card" style="display:flex; gap:15px; align-items:center;">
+                                ${p.image ? `<img src="${p.image}" alt="" style="width:70px; height:70px; object-fit:contain; border-radius:8px;">` : ''}
+                                <div style="flex:1;">
+                                    <h4>${i+1}. ${p.title}</h4>
+                                    <div class="product-price">${p.price}</div>
+                                    <a href="${p.affiliate_url}" target="_blank" class="product-btn">🔗 Ver no Amazon</a>
+                                </div>
+                            </div>`;
+                        });
+
+                        document.getElementById('bestPricesResult').innerHTML = html;
+                        document.getElementById('monitorResult').innerHTML = '';
+                    });
+                });
         }
 
         function showMsg(id, msg, type) {

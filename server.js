@@ -509,7 +509,13 @@ app.post('/api/send-best-prices', async (req, res) => {
       success: true,
       message: 'Clique no link abaixo para enviar no WhatsApp',
       whatsappLink: whatsappLink,
-      count: bestPrices.length
+      count: bestPrices.length,
+      products: bestPrices.map(p => ({
+        title: p.title,
+        price: p.price,
+        image: p.image,
+        affiliate_url: `https://www.amazon.com.br/dp/${p.asin}?tag=${process.env.AMAZON_PARTNER_TAG || 'tainadadecio-20'}`
+      }))
     });
   } catch (error) {
     res.json({ success: false, error: error.message });
