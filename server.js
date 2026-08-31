@@ -441,10 +441,16 @@ app.post('/api/send-best-prices', async (req, res) => {
 
     message += '_Clique nos links para comprar com seu afiliado! ðŸ’¸_';
 
-    // Gerar link WhatsApp
-    const whatsappLink = `https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}`;
+    // Gerar link WhatsApp - suporta número ou link de grupo
+    let whatsappLink;
+    if (whatsapp.includes('chat.whatsapp.com')) {
+      whatsappLink = whatsapp;
+    } else {
+      const cleanNumber = whatsapp.replace(/[^\d]/g, '');
+      whatsappLink = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`;
+    }
 
-    console.log(`ðŸ“± Mensagem de promoÃ§Ã£o gerada para ${whatsapp}`);
+    console.log(`Mensagem de promocao gerada para ${whatsapp}`);
 
     res.json({
       success: true,
