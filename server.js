@@ -378,8 +378,9 @@ app.post('/api/config', async (req, res) => {
 });
 
 app.get('/api/monitor', async (req, res) => {
-  const results = await monitorPrices();
-  res.json({ success: true, results });
+  await monitorPrices();
+  const config = await loadConfig();
+  res.json({ success: true, results: config.products });
 });
 
 app.get('/api/history', async (req, res) => {
