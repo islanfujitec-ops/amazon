@@ -569,3 +569,5 @@ app.listen(PORT, async () => {
 
 
 // Trigger redeploy: Supabase env vars configured 2026-08-31 13:52
+
+// Redeploy: new Supabase project connected 2026-08-31 14:12
