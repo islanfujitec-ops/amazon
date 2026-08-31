@@ -201,12 +201,12 @@
 
     <script>
         // Verificar autenticação ao iniciar
-        window.onload = function() {
+        document.addEventListener('DOMContentLoaded', function() {
             checkAuth();
             loadConfig();
             loadHistory();
-            setTimeout(checkSystemStatus, 1000);
-        };
+            checkSystemStatus();
+        });
 
         function checkAuth() {
             const token = localStorage.getItem('auth_token');
@@ -294,7 +294,10 @@
         }
 
         function monitorPrices() {
-            document.getElementById('monitorResult').innerHTML = '<p style="text-align: center; padding: 40px;">⏳ Buscando preços...</p>';
+            const el = document.getElementById('monitorResult');
+            el.classList.remove('loading');
+            el.style.display = 'block';
+            el.innerHTML = '<p style="text-align: center; padding: 40px;">⏳ Buscando preços...</p>';
 
             fetch('/api/monitor')
                 .then(r => r.json())
