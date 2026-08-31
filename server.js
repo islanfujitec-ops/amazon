@@ -280,40 +280,18 @@ async function monitorPrices() {
 
   console.log(`\nðŸ” Buscando preÃ§os... (${new Date().toLocaleTimeString()})`);
 
-  const allResults = [];
-  const searchTerms = [...config.brands, ...config.keywords];
-
-  for (const term of searchTerms) {
-    const results = await searchAmazonBrazil(term);
-    allResults.push(...results);
-    console.log(`âœ… ${term}: ${results.length} produtos encontrados`);
-  }
-
-  // Remover duplicatas
-  const uniqueResults = Array.from(
-    new Map(allResults.map(item => [item.link, item])).values()
-  );
-
-  // Amazon bloqueia scraping automatizado (Akamai bot-check) - normalmente retorna 0.
-  // ponytail: fallback para banco de produtos curado até termos acesso à Creators API
-  // (precisa de 10 vendas/30 dias). Upgrade: trocar por searchAmazonProducts() real.
-  if (uniqueResults.length === 0) {
-    const matched = new Map();
-    for (const brand of config.brands) {
-      for (const p of getMockProducts(brand, 5)) {
-        matched.set(p.asin, p);
-      }
+  // Amazon bloqueia scraping automatizado com Akamai bot-check (sempre retorna challenge, nunca resultado real).
+  // ponytail: pulamos a tentativa ao vivo (32 chamadas sequenciais lentas e inúteis, risco de timeout na Vercel)
+  // e usamos direto o banco de produtos curado. Upgrade: trocar por searchAmazonProducts() (Creators API)
+  // quando a conta ficar elegível (10 vendas/30 dias).
+  const uniqueResults = [];
+  const matched = new Map();
+  for (const brand of config.brands) {
+    for (const p of getMockProducts(brand, 5)) {
+      matched.set(p.asin, p);
     }
-    config.products = Array.from(matched.values());
-  } else {
-    config.products = uniqueResults.map(p => ({
-      asin: '',
-      title: p.title,
-      price: `R$ ${p.price.toFixed(2)}`,
-      store: p.store,
-      link: p.link
-    }));
   }
+  config.products = Array.from(matched.values());
 
   // Salvar histórico
   config.priceHistory.push(...uniqueResults.map(p => ({
