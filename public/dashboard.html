@@ -126,12 +126,18 @@
             <div id="brands" class="tab-content">
                 <h2>🏷️ Marcas & Keywords Configuradas</h2>
 
-                <div class="info-box">
-                    <strong>27 Marcas:</strong> Asmodee, Galápagos, Mepple BR, Copag, Devir, GROK, CNMON, Jelly monster, Rio grande Games, Caos tome games, Across the board, RAVENSBURG, MARVEL, AWAKEN REALMS, STONEMAIER GAMES, MANDALA, Gmt games, GAMEGENIC, Paper games, Martel, POKÉMON, LORCANA, Chip theory games, Eagle Games, Fantasy Flight Games, WISE WIZARD GAMES, LA BOITE DE JEU
+                <div style="margin-bottom: 30px;">
+                    <h3>📋 Marcas Ativas</h3>
+                    <div id="brandsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                        <p>Carregando marcas...</p>
+                    </div>
                 </div>
 
-                <div class="info-box">
-                    <strong>5 Keywords:</strong> Brinquedos e jogos, Jogos e acessórios, Jogos de tabuleiro, Jogos de cartas Colecionáveis, Cartas colecionáveis
+                <div style="margin-bottom: 30px;">
+                    <h3>🔑 Keywords Ativas</h3>
+                    <div id="keywordsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                        <p>Carregando keywords...</p>
+                    </div>
                 </div>
 
                 <div style="margin-top: 30px;">
@@ -209,6 +215,30 @@
                     if (data.whatsappNumber) document.getElementById('whatsappNumber').value = data.whatsappNumber;
                     if (data.frequency) document.getElementById('frequency').value = data.frequency;
                     document.getElementById('autoSend').checked = data.sendAlerts !== false;
+
+                    // Carregar marcas
+                    if (data.brands && data.brands.length > 0) {
+                        let html = '';
+                        data.brands.forEach(brand => {
+                            html += `<div class="info-box" style="display: flex; justify-content: space-between; align-items: center;">
+                                <strong>${brand}</strong>
+                                <button class="btn btn-danger" style="padding: 5px 10px; font-size: 0.9em;" onclick="removeBrand('${brand}')">🗑️ Remover</button>
+                            </div>`;
+                        });
+                        document.getElementById('brandsList').innerHTML = html;
+                    }
+
+                    // Carregar keywords
+                    if (data.keywords && data.keywords.length > 0) {
+                        let html = '';
+                        data.keywords.forEach(keyword => {
+                            html += `<div class="info-box" style="display: flex; justify-content: space-between; align-items: center;">
+                                <strong>${keyword}</strong>
+                                <button class="btn btn-danger" style="padding: 5px 10px; font-size: 0.9em;" onclick="removeKeyword('${keyword}')">🗑️ Remover</button>
+                            </div>`;
+                        });
+                        document.getElementById('keywordsList').innerHTML = html;
+                    }
                 });
         }
 
@@ -317,11 +347,85 @@
         }
 
         function addBrand() {
-            alert('Recurso em desenvolvimento');
+            const brand = document.getElementById('newBrand').value.trim();
+            if (!brand) {
+                alert('❌ Digite o nome da marca');
+                return;
+            }
+
+            fetch('/api/add-brand', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ brand })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Marca adicionada!');
+                    document.getElementById('newBrand').value = '';
+                    location.reload();
+                } else {
+                    alert('❌ ' + data.error);
+                }
+            });
         }
 
         function addKeyword() {
-            alert('Recurso em desenvolvimento');
+            const keyword = document.getElementById('newKeyword').value.trim();
+            if (!keyword) {
+                alert('❌ Digite a keyword');
+                return;
+            }
+
+            fetch('/api/add-keyword', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keyword })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Keyword adicionada!');
+                    document.getElementById('newKeyword').value = '';
+                    location.reload();
+                } else {
+                    alert('❌ ' + data.error);
+                }
+            });
+        }
+
+        function removeBrand(brand) {
+            if (confirm(`Remover marca "${brand}"?`)) {
+                fetch('/api/remove-brand', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ brand })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('✅ Marca removida!');
+                        location.reload();
+                    }
+                });
+            }
+        }
+
+        function removeKeyword(keyword) {
+            if (confirm(`Remover keyword "${keyword}"?`)) {
+                fetch('/api/remove-keyword', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keyword })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('✅ Keyword removida!');
+                        location.reload();
+                    }
+                });
+            }
         }
     </script>
 </body>

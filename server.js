@@ -18,6 +18,54 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Adicionar marca
+app.post('/api/add-brand', (req, res) => {
+  const config = loadConfig();
+  const { brand } = req.body;
+
+  if (brand && !config.brands.includes(brand)) {
+    config.brands.push(brand);
+    saveConfig(config);
+    res.json({ success: true, brands: config.brands });
+  } else {
+    res.json({ success: false, error: 'Marca inválida ou já existe' });
+  }
+});
+
+// Remover marca
+app.post('/api/remove-brand', (req, res) => {
+  const config = loadConfig();
+  const { brand } = req.body;
+
+  config.brands = config.brands.filter(b => b !== brand);
+  saveConfig(config);
+  res.json({ success: true, brands: config.brands });
+});
+
+// Adicionar keyword
+app.post('/api/add-keyword', (req, res) => {
+  const config = loadConfig();
+  const { keyword } = req.body;
+
+  if (keyword && !config.keywords.includes(keyword)) {
+    config.keywords.push(keyword);
+    saveConfig(config);
+    res.json({ success: true, keywords: config.keywords });
+  } else {
+    res.json({ success: false, error: 'Keyword inválida ou já existe' });
+  }
+});
+
+// Remover keyword
+app.post('/api/remove-keyword', (req, res) => {
+  const config = loadConfig();
+  const { keyword } = req.body;
+
+  config.keywords = config.keywords.filter(k => k !== keyword);
+  saveConfig(config);
+  res.json({ success: true, keywords: config.keywords });
+});
+
 console.log('âœ… TABULEIRO360 - API integrada com Amazon Associados');
 
 // Arquivo de dados
