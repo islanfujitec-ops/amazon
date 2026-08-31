@@ -122,10 +122,24 @@
                 <button class="btn btn-primary" onclick="saveSettings()">💾 Salvar Configurações</button>
 
                 <div style="margin-top: 30px;">
-                    <h3>📋 Status do Sistema</h3>
-                    <div class="status-box success" id="systemStatus">
-                        <h3>✅ Sistema Online</h3>
-                        <p>API funcionando corretamente</p>
+                    <h3>📊 Status do Sistema em Tempo Real</h3>
+                    <div id="statusContainer" style="display: grid; gap: 15px;">
+                        <div class="status-box" id="amazonStatus">
+                            <h4>🔗 Amazon API</h4>
+                            <p>⏳ Verificando...</p>
+                        </div>
+                        <div class="status-box" id="whatsappStatus">
+                            <h4>📱 WhatsApp</h4>
+                            <p>⏳ Verificando...</p>
+                        </div>
+                        <div class="status-box" id="groupStatus">
+                            <h4>👥 Grupo Vinculado</h4>
+                            <p>⏳ Verificando...</p>
+                        </div>
+                        <div class="status-box" id="readyStatus">
+                            <h4>🚀 Sistema Pronto</h4>
+                            <p>⏳ Verificando...</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -205,6 +219,7 @@
             checkAuth();
             loadConfig();
             loadHistory();
+            setTimeout(checkSystemStatus, 1000);
         };
 
         function checkAuth() {
@@ -450,6 +465,67 @@
                 });
             }
         }
+
+        // Validar status do sistema em tempo real
+        function checkSystemStatus() {
+            // 1. Verificar Amazon API
+            fetch('/api/amazon/status')
+                .then(r => r.json())
+                .then(data => {
+                    const amazonEl = document.getElementById('amazonStatus');
+                    if (data.credentials_configured) {
+                        amazonEl.className = 'status-box success';
+                        amazonEl.innerHTML = '<h4>🔗 Amazon API</h4><p>✅ <strong>Ativo</strong> - Credenciais OK</p><p style="font-size: 0.9em; color: #666;">Tag: ' + data.partner_tag + '</p>';
+                    } else {
+                        amazonEl.className = 'status-box';
+                        amazonEl.innerHTML = '<h4>🔗 Amazon API</h4><p>❌ Sem credenciais</p>';
+                    }
+                });
+
+            // 2. Verificar WhatsApp e Grupo
+            fetch('/api/config')
+                .then(r => r.json())
+                .then(data => {
+                    const whatsappEl = document.getElementById('whatsappStatus');
+                    const groupEl = document.getElementById('groupStatus');
+                    const readyEl = document.getElementById('readyStatus');
+
+                    if (data.whatsappNumber) {
+                        const isGroup = data.whatsappNumber.includes('chat.whatsapp.com');
+                        whatsappEl.className = 'status-box success';
+                        whatsappEl.innerHTML = '<h4>📱 WhatsApp</h4><p>✅ <strong>Configurado</strong></p><p style="font-size: 0.9em; color: #666;">' + (isGroup ? 'Link de Grupo' : 'Numero') + '</p>';
+
+                        if (isGroup) {
+                            groupEl.className = 'status-box success';
+                            groupEl.innerHTML = '<h4>👥 Grupo Vinculado</h4><p>✅ <strong>Validado</strong></p><p style="font-size: 0.9em; color: #666;">Pronto para enviar mensagens</p>';
+                        } else {
+                            groupEl.className = 'status-box';
+                            groupEl.innerHTML = '<h4>👥 Grupo Vinculado</h4><p>⚠️ Número individual (não é grupo)</p>';
+                        }
+                    } else {
+                        whatsappEl.className = 'status-box';
+                        whatsappEl.innerHTML = '<h4>📱 WhatsApp</h4><p>❌ Não configurado</p>';
+                        groupEl.className = 'status-box';
+                        groupEl.innerHTML = '<h4>👥 Grupo Vinculado</h4><p>⚠️ Configure WhatsApp primeiro</p>';
+                    }
+
+                    // Verificar se sistema está pronto
+                    if (data.whatsappNumber && data.brands && data.brands.length > 0 && data.keywords && data.keywords.length > 0) {
+                        readyEl.className = 'status-box success';
+                        readyEl.innerHTML = '<h4>🚀 Sistema Pronto</h4><p>✅ <strong>100% Operacional</strong></p><p style="font-size: 0.9em; color: #666;">Pronto para enviar promos</p>';
+                    } else {
+                        readyEl.className = 'status-box';
+                        let missing = [];
+                        if (!data.whatsappNumber) missing.push('WhatsApp');
+                        if (!data.brands || data.brands.length === 0) missing.push('Marcas');
+                        if (!data.keywords || data.keywords.length === 0) missing.push('Keywords');
+                        readyEl.innerHTML = '<h4>🚀 Sistema Pronto</h4><p>⚠️ Faltam: ' + missing.join(', ') + '</p>';
+                    }
+                });
+        }
+
+        // Atualizar status a cada 30 segundos
+        setInterval(checkSystemStatus, 30000);
     </script>
 </body>
 </html>
