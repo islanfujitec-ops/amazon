@@ -296,26 +296,11 @@ async function monitorPrices() {
     items.push({ title: kw, type: 'categoria', price: 'Ver ofertas', store: 'Amazon.com.br', affiliate_url: buildOfferUrl(kw) });
   }
   config.products = items;
-  const uniqueResults = items;
-
-  // Enviar alerta WhatsApp se configurado
-  if (config.sendAlerts && config.whatsappNumber && uniqueResults.length > 0) {
-    const topProducts = uniqueResults.slice(0, 3);
-    let message = `ðŸŽ² *Produtos Encontrados*\n\n`;
-    topProducts.forEach((p, i) => {
-      message += `${i + 1}. *${p.title.substring(0, 50)}*\n`;
-      message += `ðŸ’° R$ ${p.price.toFixed(2)}\n`;
-      message += `ðŸ”— ${p.link}\n\n`;
-    });
-    message += `HorÃ¡rio: ${new Date().toLocaleTimeString()}`;
-
-    await sendWhatsAppAlert(config.whatsappNumber, message);
-  }
 
   await saveConfig(config);
-  console.log(`âœ… Monitoramento concluÃ­do: ${uniqueResults.length} produtos`);
+  console.log(`Ofertas geradas: ${items.length} (marcas + categorias)`);
 
-  return uniqueResults;
+  return items;
 }
 
 // 🔐 LOGIN
@@ -355,9 +340,13 @@ app.post('/api/config', async (req, res) => {
 });
 
 app.get('/api/monitor', async (req, res) => {
-  await monitorPrices();
-  const config = await loadConfig();
-  res.json({ success: true, results: config.products });
+  try {
+    const items = await monitorPrices();
+    res.json({ success: true, results: items || [] });
+  } catch (error) {
+    console.error('Erro no monitor:', error.message);
+    res.json({ success: false, error: error.message, results: [] });
+  }
 });
 
 app.get('/api/history', async (req, res) => {
