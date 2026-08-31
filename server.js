@@ -56,13 +56,13 @@ app.get('/', (req, res) => {
 });
 
 // Adicionar marca
-app.post('/api/add-brand', (req, res) => {
-  const config = loadConfig();
+app.post('/api/add-brand', async (req, res) => {
+  const config = await loadConfig();
   const { brand } = req.body;
 
   if (brand && !config.brands.includes(brand)) {
     config.brands.push(brand);
-    saveConfig(config);
+    await saveConfig(config);
     res.json({ success: true, brands: config.brands });
   } else {
     res.json({ success: false, error: 'Marca inválida ou já existe' });
@@ -70,23 +70,23 @@ app.post('/api/add-brand', (req, res) => {
 });
 
 // Remover marca
-app.post('/api/remove-brand', (req, res) => {
-  const config = loadConfig();
+app.post('/api/remove-brand', async (req, res) => {
+  const config = await loadConfig();
   const { brand } = req.body;
 
   config.brands = config.brands.filter(b => b !== brand);
-  saveConfig(config);
+  await saveConfig(config);
   res.json({ success: true, brands: config.brands });
 });
 
 // Adicionar keyword
-app.post('/api/add-keyword', (req, res) => {
-  const config = loadConfig();
+app.post('/api/add-keyword', async (req, res) => {
+  const config = await loadConfig();
   const { keyword } = req.body;
 
   if (keyword && !config.keywords.includes(keyword)) {
     config.keywords.push(keyword);
-    saveConfig(config);
+    await saveConfig(config);
     res.json({ success: true, keywords: config.keywords });
   } else {
     res.json({ success: false, error: 'Keyword inválida ou já existe' });
@@ -94,25 +94,30 @@ app.post('/api/add-keyword', (req, res) => {
 });
 
 // Remover keyword
-app.post('/api/remove-keyword', (req, res) => {
-  const config = loadConfig();
+app.post('/api/remove-keyword', async (req, res) => {
+  const config = await loadConfig();
   const { keyword } = req.body;
 
   config.keywords = config.keywords.filter(k => k !== keyword);
-  saveConfig(config);
+  await saveConfig(config);
   res.json({ success: true, keywords: config.keywords });
 });
 
 console.log('âœ… TABULEIRO360 - API integrada com Amazon Associados');
 
-// Arquivo de dados
+// Arquivo de dados (fallback local - só funciona em desenvolvimento, Vercel não persiste)
 const dataFile = path.join(__dirname, 'config.json');
 
-// Carregar configuraÃ§Ãµes
-function loadConfig() {
-  if (fs.existsSync(dataFile)) {
-    return JSON.parse(fs.readFileSync(dataFile, 'utf8'));
-  }
+// Supabase - persistência real (funciona no Vercel)
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const supabaseHeaders = {
+  apikey: SUPABASE_KEY,
+  Authorization: `Bearer ${SUPABASE_KEY}`,
+  'Content-Type': 'application/json'
+};
+
+function getDefaultConfig() {
   return {
     amazonEmail: '',
     amazonPassword: '',
@@ -120,14 +125,14 @@ function loadConfig() {
     frequency: 60,
     keywords: [
       'Brinquedos e jogos',
-      'Jogos e acessÃ³rios',
+      'Jogos e acessórios',
       'Jogos de tabuleiro',
-      'Jogos de cartas ColecionÃ¡veis',
-      'Cartas colecionÃ¡veis'
+      'Jogos de cartas Colecionáveis',
+      'Cartas colecionáveis'
     ],
     brands: [
       'Asmodee',
-      'GalÃ¡pagos',
+      'Galápagos',
       'Mepple BR',
       'Copag',
       'Devir',
@@ -146,7 +151,7 @@ function loadConfig() {
       'GAMEGENIC',
       'Paper games',
       'Martel',
-      'POKÃ‰MON',
+      'POKÉMON',
       'LORCANA',
       'Chip theory games',
       'Eagle Games',
@@ -160,9 +165,52 @@ function loadConfig() {
   };
 }
 
-// Salvar configuraÃ§Ãµes
-function saveConfig(config) {
-  fs.writeFileSync(dataFile, JSON.stringify(config, null, 2));
+// Carregar configurações
+async function loadConfig() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    // Sem Supabase configurado - usa arquivo local (não persiste no Vercel)
+    if (fs.existsSync(dataFile)) {
+      return JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+    }
+    return getDefaultConfig();
+  }
+
+  try {
+    const { data } = await axios.get(
+      `${SUPABASE_URL}/rest/v1/tabuleiro360_config?id=eq.1&select=data`,
+      { headers: supabaseHeaders }
+    );
+
+    if (data && data[0] && data[0].data) {
+      return data[0].data;
+    }
+
+    // Linha ainda não existe - criar com config padrão
+    const defaultConfig = getDefaultConfig();
+    await saveConfig(defaultConfig);
+    return defaultConfig;
+  } catch (error) {
+    console.error('Erro ao carregar config do Supabase:', error.message);
+    return getDefaultConfig();
+  }
+}
+
+// Salvar configurações
+async function saveConfig(config) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    fs.writeFileSync(dataFile, JSON.stringify(config, null, 2));
+    return;
+  }
+
+  try {
+    await axios.post(
+      `${SUPABASE_URL}/rest/v1/tabuleiro360_config`,
+      { id: 1, data: config },
+      { headers: { ...supabaseHeaders, Prefer: 'resolution=merge-duplicates' } }
+    );
+  } catch (error) {
+    console.error('Erro ao salvar config no Supabase:', error.message);
+  }
 }
 
 // Scraper Amazon
@@ -222,7 +270,7 @@ async function sendWhatsAppAlert(phoneNumber, message) {
 
 // Monitorar preÃ§os
 async function monitorPrices() {
-  const config = loadConfig();
+  const config = await loadConfig();
 
   if (!config.brands.length && !config.keywords.length) {
     console.log('âŒ Nenhuma marca ou palavra-chave configurada');
@@ -265,7 +313,7 @@ async function monitorPrices() {
     await sendWhatsAppAlert(config.whatsappNumber, message);
   }
 
-  saveConfig(config);
+  await saveConfig(config);
   console.log(`âœ… Monitoramento concluÃ­do: ${uniqueResults.length} produtos`);
 
   return uniqueResults;
@@ -296,14 +344,14 @@ app.post('/api/logout', (req, res) => {
 });
 
 // APIs
-app.get('/api/config', (req, res) => {
-  res.json(loadConfig());
+app.get('/api/config', async (req, res) => {
+  res.json(await loadConfig());
 });
 
-app.post('/api/config', (req, res) => {
-  const config = loadConfig();
+app.post('/api/config', async (req, res) => {
+  const config = await loadConfig();
   Object.assign(config, req.body);
-  saveConfig(config);
+  await saveConfig(config);
   res.json({ success: true, config });
 });
 
@@ -312,15 +360,15 @@ app.get('/api/monitor', async (req, res) => {
   res.json({ success: true, results });
 });
 
-app.get('/api/history', (req, res) => {
-  const config = loadConfig();
+app.get('/api/history', async (req, res) => {
+  const config = await loadConfig();
   res.json(config.priceHistory.slice(-100));
 });
 
-app.get('/api/clear-history', (req, res) => {
-  const config = loadConfig();
+app.get('/api/clear-history', async (req, res) => {
+  const config = await loadConfig();
   config.priceHistory = [];
-  saveConfig(config);
+  await saveConfig(config);
   res.json({ success: true });
 });
 
@@ -386,7 +434,7 @@ app.get('/api/amazon/status', (req, res) => {
 // ðŸŽ¯ MELHORES PREÃ‡OS - Endpoint para listar produtos com melhores preÃ§os
 app.get('/api/best-prices', async (req, res) => {
   try {
-    const config = loadConfig();
+    const config = await loadConfig();
 
     if (!config.products || config.products.length === 0) {
       return res.json({ bestPrices: [] });
@@ -415,7 +463,11 @@ app.get('/api/best-prices', async (req, res) => {
 app.post('/api/send-best-prices', async (req, res) => {
   try {
     const { whatsapp } = req.body;
-    const config = loadConfig();
+    const config = await loadConfig();
+
+    if (!whatsapp) {
+      return res.json({ success: false, error: 'Configure um número ou grupo WhatsApp primeiro' });
+    }
 
     if (!config.products || config.products.length === 0) {
       return res.json({ success: false, error: 'Nenhum produto monitorado' });
@@ -467,7 +519,7 @@ app.post('/api/send-best-prices', async (req, res) => {
 app.post('/api/send-product-whatsapp', async (req, res) => {
   try {
     const { asin, whatsapp } = req.body;
-    const config = loadConfig();
+    const config = await loadConfig();
 
     const product = config.products.find(p => p.asin === asin);
     if (!product) {
@@ -497,12 +549,12 @@ app.post('/api/send-product-whatsapp', async (req, res) => {
 });
 
 // Iniciar servidor
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`\nðŸš€ Price Monitor rodando em http://localhost:${PORT}`);
   console.log(`ðŸ“Š Dashboard: http://localhost:${PORT}\n`);
 
   // Carregar config
-  const config = loadConfig();
+  const config = await loadConfig();
 
   // Agendar monitoramento
   if (config.frequency > 0) {
