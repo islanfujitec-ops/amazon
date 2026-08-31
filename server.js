@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { searchAmazonProducts, getProductByASIN } = require('./lib/amazonApi');
+const { getMockProducts } = require('./lib/mockProducts');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -293,7 +294,28 @@ async function monitorPrices() {
     new Map(allResults.map(item => [item.link, item])).values()
   );
 
-  // Salvar histÃ³rico
+  // Amazon bloqueia scraping automatizado (Akamai bot-check) - normalmente retorna 0.
+  // ponytail: fallback para banco de produtos curado até termos acesso à Creators API
+  // (precisa de 10 vendas/30 dias). Upgrade: trocar por searchAmazonProducts() real.
+  if (uniqueResults.length === 0) {
+    const matched = new Map();
+    for (const brand of config.brands) {
+      for (const p of getMockProducts(brand, 5)) {
+        matched.set(p.asin, p);
+      }
+    }
+    config.products = Array.from(matched.values());
+  } else {
+    config.products = uniqueResults.map(p => ({
+      asin: '',
+      title: p.title,
+      price: `R$ ${p.price.toFixed(2)}`,
+      store: p.store,
+      link: p.link
+    }));
+  }
+
+  // Salvar histórico
   config.priceHistory.push(...uniqueResults.map(p => ({
     ...p,
     timestamp: new Date().toISOString()
