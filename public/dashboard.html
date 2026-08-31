@@ -379,7 +379,7 @@
 
                         (data.products || []).forEach((p, i) => {
                             html += `<div class="product-card" style="display:flex; gap:15px; align-items:center;">
-                                ${p.image ? `<img src="${p.image}" alt="" style="width:70px; height:70px; object-fit:contain; border-radius:8px;">` : ''}
+                                ${p.image ? `<img src="${p.image}" alt="" style="width:70px; height:70px; object-fit:contain; border-radius:8px;" onerror="this.style.display='none'">` : ''}
                                 <div style="flex:1;">
                                     <h4>${i+1}. ${p.title}</h4>
                                     <div class="product-price">${p.price}</div>
