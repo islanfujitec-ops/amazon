@@ -88,14 +88,9 @@
                 <div id="settingsMsg"></div>
 
                 <div class="form-group">
-                    <label>📱 WhatsApp - Número ou Grupo</label>
-                    <input type="text" id="whatsappNumber" placeholder="Número: 55XXXXXXXXXX ou Link: https://chat.whatsapp.com/XXXXX" value="">
-                    <small>Número (55XXXXXXXXXX) ou Link do Grupo (chat.whatsapp.com/...)</small>
-                </div>
-
-                <div style="background: #f0f7ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #667eea;">
-                    <h4 style="color: #667eea; margin-bottom: 10px;">📱 QR Code WhatsApp (Em Breve)</h4>
-                    <p style="color: #666; font-size: 0.9em;">Em breve você poderá ler QR code do WhatsApp Web para conectar diretamente.</p>
+                    <label>📱 Número WhatsApp</label>
+                    <input type="text" id="whatsappNumber" placeholder="+55DDNÚMERO (ex: +5581989546224)" value="">
+                    <small>Formato: +55 + DDD + número</small>
                 </div>
 
                 <div class="form-group">
@@ -133,7 +128,7 @@
                             <p>⏳ Verificando...</p>
                         </div>
                         <div class="status-box" id="groupStatus">
-                            <h4>👥 Grupo Vinculado</h4>
+                            <h4>📞 Número Validado</h4>
                             <p>⏳ Verificando...</p>
                         </div>
                         <div class="status-box" id="readyStatus">
@@ -282,7 +277,7 @@
 
         function saveSettings() {
             const config = {
-                whatsappNumber: document.getElementById('whatsappNumber').value,
+                whatsappNumber: document.getElementById('whatsappNumber').value.trim(),
                 frequency: parseInt(document.getElementById('frequency').value),
                 sendAlerts: document.getElementById('autoSend').checked
             };
@@ -491,23 +486,26 @@
                     const groupEl = document.getElementById('groupStatus');
                     const readyEl = document.getElementById('readyStatus');
 
-                    if (data.whatsappNumber) {
-                        const isGroup = data.whatsappNumber.includes('chat.whatsapp.com');
-                        whatsappEl.className = 'status-box success';
-                        whatsappEl.innerHTML = '<h4>📱 WhatsApp</h4><p>✅ <strong>Configurado</strong></p><p style="font-size: 0.9em; color: #666;">' + (isGroup ? 'Link de Grupo' : 'Numero') + '</p>';
+                    const digits = (data.whatsappNumber || '').replace(/\D/g, '');
+                    const isValidNumber = digits.length >= 12 && digits.length <= 13;
 
-                        if (isGroup) {
-                            groupEl.className = 'status-box success';
-                            groupEl.innerHTML = '<h4>👥 Grupo Vinculado</h4><p>✅ <strong>Validado</strong></p><p style="font-size: 0.9em; color: #666;">Pronto para enviar mensagens</p>';
-                        } else {
-                            groupEl.className = 'status-box';
-                            groupEl.innerHTML = '<h4>👥 Grupo Vinculado</h4><p>⚠️ Número individual (não é grupo)</p>';
-                        }
+                    if (data.whatsappNumber && isValidNumber) {
+                        whatsappEl.className = 'status-box success';
+                        whatsappEl.innerHTML = '<h4>📱 WhatsApp</h4><p>✅ <strong>Configurado</strong></p><p style="font-size: 0.9em; color: #666;">+' + digits + '</p>';
+
+                        groupEl.className = 'status-box success';
+                        groupEl.innerHTML = '<h4>📞 Número Validado</h4><p>✅ <strong>Formato correto</strong></p><p style="font-size: 0.9em; color: #666;">Pronto para enviar mensagens</p>';
+                    } else if (data.whatsappNumber) {
+                        whatsappEl.className = 'status-box';
+                        whatsappEl.innerHTML = '<h4>📱 WhatsApp</h4><p>⚠️ <strong>Formato inválido</strong></p>';
+
+                        groupEl.className = 'status-box';
+                        groupEl.innerHTML = '<h4>📞 Número Validado</h4><p>⚠️ Use +55DDNÚMERO</p>';
                     } else {
                         whatsappEl.className = 'status-box';
                         whatsappEl.innerHTML = '<h4>📱 WhatsApp</h4><p>❌ Não configurado</p>';
                         groupEl.className = 'status-box';
-                        groupEl.innerHTML = '<h4>👥 Grupo Vinculado</h4><p>⚠️ Configure WhatsApp primeiro</p>';
+                        groupEl.innerHTML = '<h4>📞 Número Validado</h4><p>⚠️ Configure WhatsApp primeiro</p>';
                     }
 
                     // Verificar se sistema está pronto
