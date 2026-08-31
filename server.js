@@ -482,17 +482,17 @@ app.post('/api/send-best-prices', async (req, res) => {
       })
       .slice(0, 5);
 
-    let message = 'ðŸŽ² *MELHORES PREÃ‡OS ENCONTRADOS - TABULEIRO360*\n\n';
+    let message = '🎲 *MELHORES PREÇOS ENCONTRADOS - TABULEIRO360*\n\n';
     message += `_Atualizados em ${new Date().toLocaleString('pt-BR')}_\n\n`;
 
     bestPrices.forEach((product, index) => {
       const affiliate_url = `https://www.amazon.com.br/dp/${product.asin}?tag=${process.env.AMAZON_PARTNER_TAG || 'tainadadecio-20'}`;
       message += `*${index + 1}. ${product.title}*\n`;
-      message += `ðŸ’° *R$ ${product.price}*\n`;
-      message += `ðŸ”— ${affiliate_url}\n\n`;
+      message += `💰 *${product.price}*\n`;
+      message += `🔗 ${affiliate_url}\n\n`;
     });
 
-    message += '_Clique nos links para comprar com seu afiliado! ðŸ’¸_';
+    message += '_Clique nos links para comprar com seu afiliado! 💸_';
 
     // Gerar link WhatsApp - suporta número ou link de grupo
     let whatsappLink;
@@ -529,11 +529,11 @@ app.post('/api/send-product-whatsapp', async (req, res) => {
 
     const affiliate_url = `https://www.amazon.com.br/dp/${product.asin}?tag=${process.env.AMAZON_PARTNER_TAG || 'tainadadecio-20'}`;
 
-    let message = 'ðŸŽ² *OFERTA ESPECIAL - TABULEIRO360*\n\n';
+    let message = '🎲 *OFERTA ESPECIAL - TABULEIRO360*\n\n';
     message += `*${product.title}*\n\n`;
-    message += `ðŸ’° *R$ ${product.price}*\n\n`;
-    message += `ðŸ”— COMPRAR: ${affiliate_url}\n\n`;
-    message += '_Aproveite! ðŸŽ¯_';
+    message += `💰 *${product.price}*\n\n`;
+    message += `🔗 COMPRAR: ${affiliate_url}\n\n`;
+    message += '_Aproveite! 🎯_';
 
     const whatsappLink = `https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}`;
 
