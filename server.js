@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { searchAmazonProducts, getProductByASIN } = require('./lib/amazonApi');
-const { getMockProducts } = require('./lib/mockProducts');
+const { getMockProducts, buildSearchUrl } = require('./lib/mockProducts');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -451,7 +451,7 @@ app.get('/api/best-prices', async (req, res) => {
       .slice(0, 10) // Top 10 melhores preÃ§os
       .map(p => ({
         ...p,
-        affiliate_url: `https://www.amazon.com.br/dp/${p.asin}?tag=${process.env.AMAZON_PARTNER_TAG || 'tainadadecio-20'}`
+        affiliate_url: buildSearchUrl(p.title)
       }));
 
     res.json({ bestPrices });
@@ -486,7 +486,7 @@ app.post('/api/send-best-prices', async (req, res) => {
     message += `_Atualizados em ${new Date().toLocaleString('pt-BR')}_\n\n`;
 
     bestPrices.forEach((product, index) => {
-      const affiliate_url = `https://www.amazon.com.br/dp/${product.asin}?tag=${process.env.AMAZON_PARTNER_TAG || 'tainadadecio-20'}`;
+      const affiliate_url = buildSearchUrl(product.title);
       message += `*${index + 1}. ${product.title}*\n`;
       message += `💰 *${product.price}*\n`;
       message += `🔗 ${affiliate_url}\n\n`;
@@ -514,7 +514,7 @@ app.post('/api/send-best-prices', async (req, res) => {
         title: p.title,
         price: p.price,
         image: p.image,
-        affiliate_url: `https://www.amazon.com.br/dp/${p.asin}?tag=${process.env.AMAZON_PARTNER_TAG || 'tainadadecio-20'}`
+        affiliate_url: buildSearchUrl(p.title)
       }))
     });
   } catch (error) {
@@ -533,7 +533,7 @@ app.post('/api/send-product-whatsapp', async (req, res) => {
       return res.json({ success: false, error: 'Produto nÃ£o encontrado' });
     }
 
-    const affiliate_url = `https://www.amazon.com.br/dp/${product.asin}?tag=${process.env.AMAZON_PARTNER_TAG || 'tainadadecio-20'}`;
+    const affiliate_url = buildSearchUrl(product.title);
 
     let message = '🎲 *OFERTA ESPECIAL - TABULEIRO360*\n\n';
     message += `*${product.title}*\n\n`;

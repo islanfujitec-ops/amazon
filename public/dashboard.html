@@ -305,7 +305,7 @@
                     if (data.results && data.results.length > 0) {
                         let html = `<div class="status-box success"><h3>✅ ${data.results.length} produtos encontrados!</h3></div>`;
                         data.results.slice(0, 10).forEach((p, i) => {
-                            const link = p.asin ? `https://www.amazon.com.br/dp/${p.asin}` : p.link;
+                            const link = `https://www.amazon.com.br/s?k=${encodeURIComponent(p.title)}&tag=tainadadecio-20`;
                             html += `<div class="product-card">
                                 <h4>${i+1}. ${p.title}</h4>
                                 <p>Loja: ${p.store}</p>
