@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { searchAmazonProducts, getProductByASIN } = require('./lib/amazonApi');
-const { getMockProducts, buildSearchUrl } = require('./lib/mockProducts');
+const { getMockProducts, buildSearchUrl, buildOfferUrl } = require('./lib/mockProducts');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -284,20 +284,19 @@ async function monitorPrices() {
   // ponytail: pulamos a tentativa ao vivo (32 chamadas sequenciais lentas e inúteis, risco de timeout na Vercel)
   // e usamos direto o banco de produtos curado. Upgrade: trocar por searchAmazonProducts() (Creators API)
   // quando a conta ficar elegível (10 vendas/30 dias).
-  const uniqueResults = [];
-  const matched = new Map();
+  // Para cada MARCA e KEYWORD que o usuário configurou, gera um link de afiliado que abre
+  // as ofertas reais daquela marca na Amazon ordenadas pelo menor preço (melhor valor primeiro).
+  // O cliente clica, vê preços reais e a compra rende comissão pela tag do usuário.
+  // Mostrar o preço exato ANTES do clique exige a Creators API (elegível após 10 vendas/30 dias).
+  const items = [];
   for (const brand of config.brands) {
-    for (const p of getMockProducts(brand, 5)) {
-      matched.set(p.asin, p);
-    }
+    items.push({ title: brand, type: 'marca', price: 'Ver ofertas', store: 'Amazon.com.br', affiliate_url: buildOfferUrl(brand) });
   }
-  config.products = Array.from(matched.values());
-
-  // Salvar histórico
-  config.priceHistory.push(...uniqueResults.map(p => ({
-    ...p,
-    timestamp: new Date().toISOString()
-  })));
+  for (const kw of config.keywords) {
+    items.push({ title: kw, type: 'categoria', price: 'Ver ofertas', store: 'Amazon.com.br', affiliate_url: buildOfferUrl(kw) });
+  }
+  config.products = items;
+  const uniqueResults = items;
 
   // Enviar alerta WhatsApp se configurado
   if (config.sendAlerts && config.whatsappNumber && uniqueResults.length > 0) {
@@ -470,52 +469,43 @@ app.post('/api/send-best-prices', async (req, res) => {
       return res.json({ success: false, error: 'Configure um número ou grupo WhatsApp primeiro' });
     }
 
-    if (!config.products || config.products.length === 0) {
-      return res.json({ success: false, error: 'Nenhum produto monitorado' });
+    // Garante que os itens (marcas + categorias) estejam gerados
+    let items = config.products;
+    if (!items || items.length === 0) {
+      items = await monitorPrices();
     }
 
-    const bestPrices = config.products
-      .sort((a, b) => {
-        const priceA = parseFloat(a.price.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
-        const priceB = parseFloat(b.price.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
-        return priceA - priceB;
-      })
-      .slice(0, 5);
+    // Limite opcional; por padrão envia todas as marcas/categorias configuradas
+    const limit = parseInt(req.body.limit) || items.length;
+    const selected = items.slice(0, limit).map(p => ({
+      title: p.title,
+      type: p.type || 'marca',
+      affiliate_url: buildOfferUrl(p.title)
+    }));
 
-    let message = '🎲 *MELHORES PREÇOS ENCONTRADOS - TABULEIRO360*\n\n';
-    message += `_Atualizados em ${new Date().toLocaleString('pt-BR')}_\n\n`;
+    let message = '🎲 *MELHORES OFERTAS - TABULEIRO360*\n\n';
+    message += `_Atualizado em ${new Date().toLocaleString('pt-BR')}_\n\n`;
+    message += 'Clique e veja as ofertas com o melhor preço:\n\n';
 
-    bestPrices.forEach((product, index) => {
-      const affiliate_url = buildSearchUrl(product.title);
-      message += `*${index + 1}. ${product.title}*\n`;
-      message += `💰 *${product.price}*\n`;
-      message += `🔗 ${affiliate_url}\n\n`;
+    selected.forEach((item, index) => {
+      message += `*${index + 1}. ${item.title}*\n`;
+      message += `🔗 ${item.affiliate_url}\n\n`;
     });
 
-    message += '_Clique nos links para comprar com seu afiliado! 💸_';
+    message += '_Ofertas Amazon atualizadas — aproveite! 💸_';
 
-    // Gerar link WhatsApp - suporta número ou link de grupo
-    let whatsappLink;
-    if (whatsapp.includes('chat.whatsapp.com')) {
-      whatsappLink = whatsapp;
-    } else {
-      const cleanNumber = whatsapp.replace(/[^\d]/g, '');
-      whatsappLink = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`;
-    }
+    // Gera link do WhatsApp para o número informado
+    const cleanNumber = whatsapp.replace(/[^\d]/g, '');
+    const whatsappLink = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`;
 
-    console.log(`Mensagem de promocao gerada para ${whatsapp}`);
+    console.log(`Mensagem de ofertas gerada para ${whatsapp} (${selected.length} itens)`);
 
     res.json({
       success: true,
       message: 'Clique no link abaixo para enviar no WhatsApp',
       whatsappLink: whatsappLink,
-      count: bestPrices.length,
-      products: bestPrices.map(p => ({
-        title: p.title,
-        price: p.price,
-        image: p.image,
-        affiliate_url: buildSearchUrl(p.title)
-      }))
+      count: selected.length,
+      products: selected
     });
   } catch (error) {
     res.json({ success: false, error: error.message });

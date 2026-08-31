@@ -175,12 +175,12 @@
 
             <!-- ABA 3: MONITOR -->
             <div id="monitor" class="tab-content">
-                <h2>📊 Monitor de Preços</h2>
-                <p style="color: #666; margin-bottom: 15px;">Busque os produtos e envie os melhores preços direto no seu WhatsApp, com seu link de afiliado.</p>
+                <h2>📊 Ofertas por Marca</h2>
+                <p style="color: #666; margin-bottom: 15px;">Gera um link de afiliado para as <strong>melhores ofertas de cada marca</strong> que você cadastrou (ordenadas pelo menor preço) e envia pronto pro seu WhatsApp. O cliente clica, compra, você ganha a comissão.</p>
 
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
-                    <button class="btn btn-primary" onclick="monitorPrices()">🔍 Buscar Preços Agora</button>
-                    <button class="btn btn-success" onclick="sendBestPrices()">📤 Enviar Top 5 no WhatsApp</button>
+                    <button class="btn btn-primary" onclick="monitorPrices()">🔍 Gerar Ofertas das Marcas</button>
+                    <button class="btn btn-success" onclick="sendBestPrices()">📤 Enviar no WhatsApp</button>
                 </div>
 
                 <div id="bestPricesResult"></div>
@@ -303,19 +303,17 @@
                 .then(r => r.json())
                 .then(data => {
                     if (data.results && data.results.length > 0) {
-                        let html = `<div class="status-box success"><h3>✅ ${data.results.length} produtos encontrados!</h3></div>`;
-                        data.results.slice(0, 10).forEach((p, i) => {
-                            const link = `https://www.amazon.com.br/s?k=${encodeURIComponent(p.title)}&tag=tainadadecio-20`;
+                        let html = `<div class="status-box success"><h3>✅ ${data.results.length} marcas/categorias com ofertas prontas!</h3></div>`;
+                        data.results.forEach((p, i) => {
+                            const link = p.affiliate_url || `https://www.amazon.com.br/s?k=${encodeURIComponent(p.title)}&i=toys&s=price-asc-rank&tag=tainadadecio-20`;
                             html += `<div class="product-card">
-                                <h4>${i+1}. ${p.title}</h4>
-                                <p>Loja: ${p.store}</p>
-                                <div class="product-price">${p.price}</div>
-                                <a href="${link}" target="_blank" class="product-btn">🔗 Ver no Amazon</a>
+                                <h4>${i+1}. ${p.title} <span style="font-size:0.75em; color:#999;">(${p.type || 'marca'})</span></h4>
+                                <a href="${link}" target="_blank" class="product-btn">🔗 Ver melhores ofertas na Amazon</a>
                             </div>`;
                         });
                         document.getElementById('monitorResult').innerHTML = html;
                     } else {
-                        document.getElementById('monitorResult').innerHTML = '<div class="status-box"><p>❌ Nenhum produto encontrado. Configure as marcas e keywords.</p></div>';
+                        document.getElementById('monitorResult').innerHTML = '<div class="status-box"><p>❌ Nenhuma marca configurada. Adicione marcas na aba Marcas & Keywords.</p></div>';
                     }
                 });
         }
@@ -376,18 +374,14 @@
                             return;
                         }
 
-                        let html = `<div class="status-box success"><h3>✅ ${data.count} melhores preços prontos!</h3>
+                        let html = `<div class="status-box success"><h3>✅ ${data.count} ofertas prontas para enviar!</h3>
                             <a href="${data.whatsappLink}" target="_blank" class="btn btn-success" style="display:block; text-align:center; padding:15px; font-size:1.1em; margin:15px 0;">📱 Enviar no WhatsApp (+${digits})</a>
                         </div>`;
 
                         (data.products || []).forEach((p, i) => {
-                            html += `<div class="product-card" style="display:flex; gap:15px; align-items:center;">
-                                ${p.image ? `<img src="${p.image}" alt="" style="width:70px; height:70px; object-fit:contain; border-radius:8px;" onerror="this.style.display='none'">` : ''}
-                                <div style="flex:1;">
-                                    <h4>${i+1}. ${p.title}</h4>
-                                    <div class="product-price">${p.price}</div>
-                                    <a href="${p.affiliate_url}" target="_blank" class="product-btn">🔗 Ver no Amazon</a>
-                                </div>
+                            html += `<div class="product-card">
+                                <h4>${i+1}. ${p.title} <span style="font-size:0.75em; color:#999;">(${p.type || 'marca'})</span></h4>
+                                <a href="${p.affiliate_url}" target="_blank" class="product-btn">🔗 Ver melhores ofertas na Amazon</a>
                             </div>`;
                         });
 
