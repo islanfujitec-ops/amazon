@@ -389,9 +389,10 @@ app.get('/api/compara-jogos', async (req, res) => {
     const minDiscount = config.minDiscount || 0; // (sem preço-base ainda; reservado)
     const limit = parseInt(req.query.limit) || 15;
 
+    // Tag SEMPRE do servidor (env AMAZON_PARTNER_TAG) — não editável pelo dashboard, por segurança
     let games = await fetchComparaJogos();
     games = games.slice(0, limit).map(g => {
-      const amazonUrl = buildSearchUrl(g.name); // busca Amazon pelo nome + sua tag
+      const amazonUrl = buildSearchUrl(g.name); // busca Amazon pelo nome + tag do servidor
       return {
         name: g.name,
         price: `R$ ${g.price.toFixed(2)}`,
@@ -560,7 +561,7 @@ app.post('/api/send-best-prices', async (req, res) => {
     const selected = items.slice(0, limit).map(p => ({
       title: p.title,
       type: p.type || 'marca',
-      // Link passa pelo rastreador /r (conta clique) e redireciona pra oferta com a tag
+      // Link passa pelo rastreador /r (conta clique) e redireciona pra oferta com a tag do servidor
       affiliate_url: trackUrl(buildOfferUrl(p.title), p.title)
     }));
 
