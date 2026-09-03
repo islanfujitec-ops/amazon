@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { searchAmazonProducts, getProductByASIN, debugApi } = require('./lib/amazonApi');
-const { getMockProducts, buildSearchUrl, buildOfferUrl } = require('./lib/mockProducts');
+const { buildSearchUrl, buildOfferUrl } = require('./lib/amazonLinks');
 const { sendViaEvolution, getEvolutionStatus, isEvolutionConfigured } = require('./lib/whatsappSender');
 const { fetchComparaJogos } = require('./lib/comparaJogos');
 
