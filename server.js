@@ -516,19 +516,28 @@ app.post('/api/send-best-prices', async (req, res) => {
           products: selected
         });
       }
-      console.log('Evolution falhou, usando fallback wa.me:', sent.error);
+      console.log('Evolution falhou, usando fallback:', sent.error);
     }
 
-    // Fallback: link wa.me (1-clique)
-    const cleanNumber = whatsapp.replace(/[^\d]/g, '');
-    const whatsappLink = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`;
+    // Fallback (Evolution não ligado ainda)
+    const isGroup = whatsapp.includes('chat.whatsapp.com');
+    let whatsappLink;
+    if (isGroup) {
+      // wa.me não pré-preenche mensagem em grupo. Abre o grupo e devolve o texto pra copiar.
+      whatsappLink = whatsapp;
+    } else {
+      const cleanNumber = whatsapp.replace(/[^\d]/g, '');
+      whatsappLink = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`;
+    }
 
     console.log(`Mensagem de ofertas gerada para ${whatsapp} (${selected.length} itens)`);
 
     res.json({
       success: true,
       sent: false,
-      message: 'Clique no link abaixo para enviar no WhatsApp',
+      isGroup,
+      messageText: message,
+      message: isGroup ? 'Abra o grupo e cole a mensagem (copie abaixo)' : 'Clique no link abaixo para enviar no WhatsApp',
       whatsappLink: whatsappLink,
       count: selected.length,
       products: selected
