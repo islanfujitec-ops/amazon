@@ -204,6 +204,7 @@
 
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
                     <button class="btn btn-primary" onclick="monitorPrices()">🔍 Gerar Ofertas das Marcas</button>
+                    <button class="btn btn-primary" onclick="loadComparaJogos()">🎯 Melhores do Compara Jogos</button>
                     <button class="btn btn-success" onclick="sendBestPrices()">📤 Enviar no WhatsApp</button>
                 </div>
 
@@ -340,6 +341,35 @@
                     } else {
                         document.getElementById('monitorResult').innerHTML = '<div class="status-box"><p>❌ Nenhuma marca configurada. Adicione marcas na aba Marcas & Keywords.</p></div>';
                     }
+                });
+        }
+
+        function loadComparaJogos() {
+            const el = document.getElementById('monitorResult');
+            el.classList.remove('loading');
+            el.style.display = 'block';
+            el.innerHTML = '<p style="text-align:center; padding:40px;">⏳ Puxando melhores jogos do Compara Jogos...</p>';
+            document.getElementById('bestPricesResult').innerHTML = '';
+
+            fetch('/api/compara-jogos?limit=15')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success || !data.games.length) {
+                        el.innerHTML = '<div class="status-box"><p>❌ Não consegui puxar agora. Tente de novo.</p></div>';
+                        return;
+                    }
+                    let html = `<div class="status-box success"><h3>🎯 ${data.count} melhores jogos (menor preço) — links prontos!</h3></div>`;
+                    data.games.forEach((g, i) => {
+                        html += `<div class="product-card" style="display:flex; gap:15px; align-items:center;">
+                            ${g.thumbnail ? `<img src="${g.thumbnail}" alt="" style="width:60px; height:60px; object-fit:contain; border-radius:8px;" onerror="this.style.display='none'">` : ''}
+                            <div style="flex:1;">
+                                <h4>${i+1}. ${g.name}</h4>
+                                <div class="product-price">${g.price} ${g.rating ? '· ⭐ '+g.rating : ''}</div>
+                                <a href="${g.affiliate_url}" target="_blank" class="product-btn">🔗 Ver na Amazon (seu link)</a>
+                            </div>
+                        </div>`;
+                    });
+                    el.innerHTML = html;
                 });
         }
 
