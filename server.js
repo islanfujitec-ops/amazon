@@ -12,6 +12,12 @@ const { sendViaEvolution, getEvolutionStatus, isEvolutionConfigured } = require(
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// URL base do app (pra montar links de rastreio de clique)
+const BASE_URL = process.env.BASE_URL || 'https://tabuleiro360.vercel.app';
+function trackUrl(target, label) {
+  return `${BASE_URL}/r?to=${encodeURIComponent(target)}&label=${encodeURIComponent(label)}`;
+}
+
 // Credenciais padrão (pode mudar depois)
 const DEFAULT_USERNAME = 'admin';
 const DEFAULT_PASSWORD = 'admin';
@@ -350,6 +356,45 @@ app.get('/api/monitor', async (req, res) => {
   }
 });
 
+// 📊 RASTREIO DE CLIQUES: conta o clique e redireciona pra Amazon.
+// Link enviado ao cliente = /r?to=<url amazon>&label=<marca>
+app.get('/r', async (req, res) => {
+  const to = req.query.to || '';
+  const label = req.query.label || 'sem-rotulo';
+
+  // Segurança: só redireciona pra Amazon (evita open-redirect)
+  const isAmazon = /^https:\/\/(www\.)?amazon\.com\.br\//.test(to);
+  if (!isAmazon) {
+    return res.status(400).send('Link inválido');
+  }
+
+  try {
+    const config = await loadConfig();
+    config.clicks = config.clicks || {};
+    config.clicks[label] = (config.clicks[label] || 0) + 1;
+    config.totalClicks = (config.totalClicks || 0) + 1;
+    await saveConfig(config);
+  } catch (e) {
+    console.error('Erro ao registrar clique:', e.message);
+  }
+
+  res.redirect(302, to);
+});
+
+// 📈 MÉTRICAS: cliques por marca (mais clicados primeiro)
+app.get('/api/metrics', async (req, res) => {
+  try {
+    const config = await loadConfig();
+    const clicks = config.clicks || {};
+    const ranking = Object.entries(clicks)
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
+    res.json({ totalClicks: config.totalClicks || 0, ranking });
+  } catch (error) {
+    res.json({ totalClicks: 0, ranking: [], error: error.message });
+  }
+});
+
 app.get('/api/history', async (req, res) => {
   const config = await loadConfig();
   res.json(config.priceHistory.slice(-100));
@@ -488,7 +533,8 @@ app.post('/api/send-best-prices', async (req, res) => {
     const selected = items.slice(0, limit).map(p => ({
       title: p.title,
       type: p.type || 'marca',
-      affiliate_url: buildOfferUrl(p.title)
+      // Link passa pelo rastreador /r (conta clique) e redireciona pra oferta com a tag
+      affiliate_url: trackUrl(buildOfferUrl(p.title), p.title)
     }));
 
     let message = '🎲 *MELHORES OFERTAS - TABULEIRO360*\n\n';

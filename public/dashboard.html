@@ -77,6 +77,7 @@
             <button class="tab-btn active" onclick="switchTab('settings')">⚙️ Configurações</button>
             <button class="tab-btn" onclick="switchTab('brands')">🏷️ Marcas & Keywords</button>
             <button class="tab-btn" onclick="switchTab('monitor')">📊 Monitor</button>
+            <button class="tab-btn" onclick="switchTab('metrics')">📈 Métricas</button>
         </div>
 
         <div class="content">
@@ -209,6 +210,14 @@
                 <div id="bestPricesResult"></div>
                 <div id="monitorResult" class="loading"></div>
             </div>
+
+            <!-- ABA 4: MÉTRICAS -->
+            <div id="metrics" class="tab-content">
+                <h2>📈 Métricas de Cliques</h2>
+                <p style="color: #666; margin-bottom: 15px;">Quantas vezes clicaram em cada oferta que você enviou. Descubra o que o público mais quer.</p>
+                <button class="btn btn-primary" onclick="loadMetrics()">🔄 Atualizar</button>
+                <div id="metricsResult" style="margin-top: 20px;"><p>Clique em Atualizar para ver os cliques.</p></div>
+            </div>
         </div>
     </div>
 
@@ -331,6 +340,27 @@
                     } else {
                         document.getElementById('monitorResult').innerHTML = '<div class="status-box"><p>❌ Nenhuma marca configurada. Adicione marcas na aba Marcas & Keywords.</p></div>';
                     }
+                });
+        }
+
+        function loadMetrics() {
+            const el = document.getElementById('metricsResult');
+            el.innerHTML = '<p>⏳ Carregando...</p>';
+            fetch('/api/metrics')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.ranking || data.ranking.length === 0) {
+                        el.innerHTML = '<div class="status-box"><p>Nenhum clique ainda. Os cliques aparecem aqui quando o público clicar nos links que você enviar.</p></div>';
+                        return;
+                    }
+                    let html = `<div class="status-box success"><h3>👆 ${data.totalClicks} cliques no total</h3></div>`;
+                    data.ranking.forEach((item, i) => {
+                        html += `<div class="product-card" style="display:flex; justify-content:space-between; align-items:center;">
+                            <h4 style="margin:0;">${i+1}. ${item.label}</h4>
+                            <span style="font-size:1.3em; font-weight:bold; color:#48bb78;">${item.count} 👆</span>
+                        </div>`;
+                    });
+                    el.innerHTML = html;
                 });
         }
 
