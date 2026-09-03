@@ -7,6 +7,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { searchAmazonProducts, getProductByASIN, debugApi } = require('./lib/amazonApi');
 const { getMockProducts, buildSearchUrl, buildOfferUrl } = require('./lib/mockProducts');
+const { sendViaEvolution, getEvolutionStatus, isEvolutionConfigured } = require('./lib/whatsappSender');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -407,6 +408,15 @@ app.post('/api/amazon/product', async (req, res) => {
   }
 });
 
+app.get('/api/whatsapp/status', async (req, res) => {
+  try {
+    const status = await getEvolutionStatus();
+    res.json(status);
+  } catch (error) {
+    res.json({ configured: false, connected: false, error: error.message });
+  }
+});
+
 app.get('/api/amazon/debug', async (req, res) => {
   try {
     const result = await debugApi(req.query.q || 'Catan');
@@ -492,7 +502,24 @@ app.post('/api/send-best-prices', async (req, res) => {
 
     message += '_Ofertas Amazon atualizadas — aproveite! 💸_';
 
-    // Gera link do WhatsApp para o número informado
+    // Se a Evolution API estiver configurada, ENVIA sozinho (100% automático).
+    // Senão, devolve o link wa.me (envio 1-clique) como fallback.
+    if (isEvolutionConfigured()) {
+      const sent = await sendViaEvolution(whatsapp, message);
+      if (sent.success) {
+        console.log(`Enviado automaticamente via Evolution para ${whatsapp} (${selected.length} itens)`);
+        return res.json({
+          success: true,
+          sent: true,
+          message: `✅ Enviado automaticamente para ${whatsapp}!`,
+          count: selected.length,
+          products: selected
+        });
+      }
+      console.log('Evolution falhou, usando fallback wa.me:', sent.error);
+    }
+
+    // Fallback: link wa.me (1-clique)
     const cleanNumber = whatsapp.replace(/[^\d]/g, '');
     const whatsappLink = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`;
 
@@ -500,6 +527,7 @@ app.post('/api/send-best-prices', async (req, res) => {
 
     res.json({
       success: true,
+      sent: false,
       message: 'Clique no link abaixo para enviar no WhatsApp',
       whatsappLink: whatsappLink,
       count: selected.length,
