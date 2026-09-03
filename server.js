@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { searchAmazonProducts, getProductByASIN, debugApi } = require('./lib/amazonApi');
 const { getMockProducts, buildSearchUrl, buildOfferUrl } = require('./lib/mockProducts');
 const { sendViaEvolution, getEvolutionStatus, isEvolutionConfigured } = require('./lib/whatsappSender');
+const { fetchComparaJogos } = require('./lib/comparaJogos');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -379,6 +380,32 @@ app.get('/r', async (req, res) => {
   }
 
   res.redirect(302, to);
+});
+
+// 🎯 COMPARA JOGOS: melhores jogos/preços do site, já com SEU link de afiliado + rastreio
+app.get('/api/compara-jogos', async (req, res) => {
+  try {
+    const config = await loadConfig();
+    const minDiscount = config.minDiscount || 0; // (sem preço-base ainda; reservado)
+    const limit = parseInt(req.query.limit) || 15;
+
+    let games = await fetchComparaJogos();
+    games = games.slice(0, limit).map(g => {
+      const amazonUrl = buildSearchUrl(g.name); // busca Amazon pelo nome + sua tag
+      return {
+        name: g.name,
+        price: `R$ ${g.price.toFixed(2)}`,
+        rating: g.rating,
+        storeCount: g.storeCount,
+        thumbnail: g.thumbnail,
+        affiliate_url: trackUrl(amazonUrl, g.name)
+      };
+    });
+
+    res.json({ success: true, count: games.length, games });
+  } catch (error) {
+    res.json({ success: false, error: error.message, games: [] });
+  }
 });
 
 // 📈 MÉTRICAS: cliques por marca (mais clicados primeiro)
