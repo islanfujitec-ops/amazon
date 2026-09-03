@@ -106,6 +106,30 @@
                 </div>
 
                 <div class="form-group">
+                    <label>🔥 Desconto mínimo (%)</label>
+                    <select id="minDiscount">
+                        <option value="0">Qualquer preço (sem filtro)</option>
+                        <option value="10">Acima de 10% off</option>
+                        <option value="20">Acima de 20% off</option>
+                        <option value="30" selected>Acima de 30% off</option>
+                        <option value="40">Acima de 40% off</option>
+                        <option value="50">Acima de 50% off</option>
+                    </select>
+                    <small>Só pega produtos com desconto acima desse valor (precisa da API ativa)</small>
+                </div>
+
+                <div class="form-group">
+                    <label>📦 Quantos produtos por marca</label>
+                    <select id="perBrand">
+                        <option value="1">1 (só o melhor)</option>
+                        <option value="3">3 melhores</option>
+                        <option value="5" selected>5 melhores</option>
+                        <option value="10">10 melhores</option>
+                    </select>
+                    <small>Quantas ofertas de cada marca o sistema traz</small>
+                </div>
+
+                <div class="form-group">
                     <label>
                         <input type="checkbox" id="autoSend" checked>
                         ✅ Ativar Envio Automático
@@ -250,6 +274,8 @@
                 .then(data => {
                     if (data.whatsappNumber) document.getElementById('whatsappNumber').value = data.whatsappNumber;
                     if (data.frequency) document.getElementById('frequency').value = data.frequency;
+                    if (data.minDiscount !== undefined) document.getElementById('minDiscount').value = data.minDiscount;
+                    if (data.perBrand !== undefined) document.getElementById('perBrand').value = data.perBrand;
                     document.getElementById('autoSend').checked = data.sendAlerts !== false;
 
                     // Carregar marcas
@@ -282,6 +308,8 @@
             const config = {
                 whatsappNumber: document.getElementById('whatsappNumber').value.trim(),
                 frequency: parseInt(document.getElementById('frequency').value),
+                minDiscount: parseInt(document.getElementById('minDiscount').value),
+                perBrand: parseInt(document.getElementById('perBrand').value),
                 sendAlerts: document.getElementById('autoSend').checked
             };
 
