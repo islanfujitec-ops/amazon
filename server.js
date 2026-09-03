@@ -5,7 +5,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { searchAmazonProducts, getProductByASIN } = require('./lib/amazonApi');
+const { searchAmazonProducts, getProductByASIN, debugApi } = require('./lib/amazonApi');
 const { getMockProducts, buildSearchUrl, buildOfferUrl } = require('./lib/mockProducts');
 
 const app = express();
@@ -404,6 +404,15 @@ app.post('/api/amazon/product', async (req, res) => {
     res.json({ success: true, product });
   } catch (error) {
     res.json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/amazon/debug', async (req, res) => {
+  try {
+    const result = await debugApi(req.query.q || 'Catan');
+    res.json(result);
+  } catch (error) {
+    res.json({ error: error.message });
   }
 });
 
