@@ -40,20 +40,40 @@ async function sendOffer() {
     const target = offer.target.trim();
     if (target.includes('chat.whatsapp.com')) {
       const code = target.split('chat.whatsapp.com/')[1].split(/[?/]/)[0];
+      // 1) tenta ENTRAR no grupo (necessário pra enviar). Se já for membro, cai no catch.
       try {
-        const info = await sock.groupGetInviteInfo(code);
-        jid = info.id;
-      } catch {
-        const res = await sock.groupAcceptInvite(code); // entra no grupo se ainda não estiver
-        jid = res;
+        jid = await sock.groupAcceptInvite(code);
+        console.log('   → Entrei no grupo:', jid);
+      } catch (e) {
+        try {
+          const info = await sock.groupGetInviteInfo(code);
+          jid = info.id;
+        } catch (e2) {
+          console.log('❌ Não consegui acessar o grupo. A conta do WhatsApp precisa ser MEMBRO do grupo.');
+          return;
+        }
       }
+      // 2) carrega os membros do grupo (necessário pra criptografar a mensagem)
+      try {
+        await sock.groupMetadata(jid);
+        await new Promise(r => setTimeout(r, 2500));
+      } catch {}
     } else if (target.includes('@g.us') || target.includes('@s.whatsapp.net')) {
       jid = target;
     } else {
       jid = target.replace(/[^\d]/g, '') + '@s.whatsapp.net';
     }
 
-    await sock.sendMessage(jid, { text: offer.message });
+    // envia (com 1 retry se der "No sessions" logo após entrar no grupo)
+    try {
+      await sock.sendMessage(jid, { text: offer.message });
+    } catch (e) {
+      if (String(e.message).includes('No sessions') || String(e.message).includes('session')) {
+        console.log('   ⏳ Preparando sessão do grupo, tentando de novo em 5s...');
+        await new Promise(r => setTimeout(r, 5000));
+        await sock.sendMessage(jid, { text: offer.message });
+      } else { throw e; }
+    }
     lastSent = Date.now();
     console.log(`✅ [${new Date().toLocaleString('pt-BR')}] Enviado (${offer.count} ofertas) para ${target}`);
   } catch (e) {
@@ -86,7 +106,15 @@ async function start() {
   const { state, saveCreds } = await useMultiFileAuthState('sessao_whatsapp');
   const { version } = await fetchLatestBaileysVersion();
 
-  sock = makeWASocket({ version, auth: state, logger: log, printQRInTerminal: false });
+  sock = makeWASocket({
+    version,
+    auth: state,
+    logger: log,
+    printQRInTerminal: false,
+    syncFullHistory: false,        // não baixa histórico (reduz erros Bad MAC)
+    markOnlineOnConnect: false,
+    getMessage: async () => undefined
+  });
 
   sock.ev.on('creds.update', saveCreds);
 
