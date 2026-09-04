@@ -10,9 +10,7 @@ echo.
 
 where node >nul 2>nul
 if errorlevel 1 (
-    echo [ERRO] Node.js NAO encontrado.
-    echo Instale em https://nodejs.org ^(versao LTS^) e rode de novo.
-    echo.
+    echo [ERRO] Node.js NAO encontrado. Instale em https://nodejs.org e rode de novo.
     pause
     exit /b
 )
@@ -21,11 +19,17 @@ echo [OK] Node.js:
 node --version
 echo.
 
-REM Instala as dependencias. Na 1a vez baixa o navegador (Chromium) - pode demorar 3-5 min.
+REM Nao baixar o Chromium do puppeteer (falha e nao precisa: usamos um navegador ja instalado)
+set PUPPETEER_SKIP_DOWNLOAD=true
+
+REM Limpa download corrompido do puppeteer (evita erro "executable is missing")
+if exist "%USERPROFILE%\.cache\puppeteer" (
+    rmdir /s /q "%USERPROFILE%\.cache\puppeteer" 2>nul
+)
+
 if not exist "node_modules\whatsapp-web.js" (
-    echo [1/2] Instalando dependencias + navegador ^(1a vez: pode demorar 3-5 min^)...
-    echo       NAO feche a janela. Aguarde ate aparecer o QR Code.
-    call npm install
+    echo [1/2] Instalando dependencias ^(rapido, sem baixar navegador^)...
+    call npm install --no-fund --no-audit
     echo.
 ) else (
     echo [OK] Dependencias ja instaladas.

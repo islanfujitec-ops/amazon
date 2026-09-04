@@ -3,7 +3,7 @@
 // o que resolve o erro "not-acceptable"/LID do Baileys. Sem Docker.
 // Conecta por QR, e no intervalo configurado busca as ofertas no app e envia no grupo/número.
 
-import "dotenv/config";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import qrcode from "qrcode-terminal";
@@ -12,6 +12,48 @@ import pkg from "whatsapp-web.js";
 
 const { Client, LocalAuth } = pkg;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Acha um navegador Chromium/Chrome/Edge JÁ instalado no servidor (evita baixar).
+// Prioriza o Chromium do Playwright (que o Radar Petronect usa e funciona aqui).
+function acharNavegador() {
+  if (process.env.CHROME_PATH && fs.existsSync(process.env.CHROME_PATH)) return process.env.CHROME_PATH;
+
+  // 1) Chromium do Playwright (%LOCALAPPDATA%\ms-playwright\chromium-XXXX\chrome-win\chrome.exe)
+  try {
+    const plDir = path.join(process.env.LOCALAPPDATA || "", "ms-playwright");
+    if (fs.existsSync(plDir)) {
+      for (const d of fs.readdirSync(plDir)) {
+        if (d.toLowerCase().startsWith("chromium")) {
+          for (const sub of ["chrome-win", "chrome-win64"]) {
+            const exe = path.join(plDir, d, sub, "chrome.exe");
+            if (fs.existsSync(exe)) return exe;
+          }
+        }
+      }
+    }
+  } catch { /* ignora */ }
+
+  // 2) Chromium baixado pelo puppeteer (se existir)
+  try {
+    const ppDir = path.join(process.env.USERPROFILE || "", ".cache", "puppeteer", "chrome");
+    if (fs.existsSync(ppDir)) {
+      for (const d of fs.readdirSync(ppDir)) {
+        const exe = path.join(ppDir, d, "chrome-win64", "chrome.exe");
+        if (fs.existsSync(exe)) return exe;
+      }
+    }
+  } catch { /* ignora */ }
+
+  // 3) Google Chrome / Edge instalados
+  const fixos = [
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
+  ];
+  for (const p of fixos) { try { if (fs.existsSync(p)) return p; } catch { /* ignora */ } }
+  return undefined;
+}
 
 // ===== CONFIG =====
 const APP_URL = process.env.APP_URL || "https://tabuleiro360.vercel.app";
@@ -100,9 +142,20 @@ async function loop(client) {
 console.log("=== TABULEIRO360 - Enviador de WhatsApp (whatsapp-web.js) ===");
 console.log("App:", APP_URL);
 
+const navegador = acharNavegador();
+if (navegador) {
+  console.log("[WhatsApp] Usando navegador:", navegador);
+} else {
+  console.log("[WhatsApp] AVISO: nenhum navegador encontrado. Instale o Google Chrome (https://www.google.com/chrome) e rode de novo.");
+}
+
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: path.join(__dirname, "data", ".wwebjs_auth") }),
-  puppeteer: { headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] }
+  puppeteer: {
+    headless: true,
+    executablePath: navegador, // usa um navegador já instalado (não baixa)
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  }
 });
 
 client.on("qr", (qr) => {
