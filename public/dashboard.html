@@ -208,7 +208,7 @@
 
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
                     <button class="btn btn-primary" onclick="monitorPrices()">🔍 Gerar Ofertas das Marcas</button>
-                    <button class="btn btn-primary" onclick="loadComparaJogos()">🎯 Melhores do Compara Jogos</button>
+                    <button class="btn btn-primary" onclick="loadComparaJogos()">🔥 Promoções do Compara Jogos</button>
                     <button class="btn btn-success" onclick="sendBestPrices()">📤 Enviar no WhatsApp</button>
                 </div>
 
@@ -362,13 +362,15 @@
                         el.innerHTML = '<div class="status-box"><p>❌ Não consegui puxar agora. Tente de novo.</p></div>';
                         return;
                     }
-                    let html = `<div class="status-box success"><h3>🎯 ${data.count} melhores jogos (menor preço) — links prontos!</h3></div>`;
+                    let html = `<div class="status-box success"><h3>🔥 ${data.count} promoções (maior desconto) — links prontos!</h3></div>`;
                     data.games.forEach((g, i) => {
+                        const desc = g.discount ? `<span style="color:#e53e3e; font-weight:bold;">🔥 ${g.discount}% OFF</span>` : '';
+                        const de = g.oldPrice ? `<span style="text-decoration:line-through; color:#999; font-size:0.85em;"> de ${g.oldPrice}</span>` : '';
                         html += `<div class="product-card" style="display:flex; gap:15px; align-items:center;">
                             ${g.thumbnail ? `<img src="${g.thumbnail}" alt="" style="width:60px; height:60px; object-fit:contain; border-radius:8px;" onerror="this.style.display='none'">` : ''}
                             <div style="flex:1;">
                                 <h4>${i+1}. ${g.name}</h4>
-                                <div class="product-price">${g.price} ${g.rating ? '· ⭐ '+g.rating : ''}</div>
+                                <div class="product-price">${g.price}${de} ${desc}</div>
                                 <a href="${g.affiliate_url}" target="_blank" class="product-btn">🔗 Ver na Amazon (seu link)</a>
                             </div>
                         </div>`;

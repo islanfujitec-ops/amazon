@@ -386,24 +386,25 @@ app.get('/r', async (req, res) => {
 app.get('/api/compara-jogos', async (req, res) => {
   try {
     const config = await loadConfig();
-    const minDiscount = config.minDiscount || 0; // (sem preço-base ainda; reservado)
     const limit = parseInt(req.query.limit) || 15;
+    const tag = process.env.AMAZON_PARTNER_TAG || 'tabuleiro3605-20';
 
-    // Tag SEMPRE do servidor (env AMAZON_PARTNER_TAG) — não editável pelo dashboard, por segurança
-    let games = await fetchComparaJogos();
-    games = games.slice(0, limit).map(g => {
-      const amazonUrl = buildSearchUrl(g.name); // busca Amazon pelo nome + tag do servidor
+    // Mostra as PROMOÇÕES REAIS (reduções de preço), maiores descontos primeiro.
+    // Aqui mostra todas pra você navegar; o filtro de desconto mínimo vale no envio do WhatsApp.
+    let deals = await fetchPriceReductions();
+    deals = deals.slice(0, limit).map(d => {
+      const amazonUrl = `https://www.amazon.com.br/s?k=${encodeURIComponent(d.name)}&i=toys&tag=${tag}`;
       return {
-        name: g.name,
-        price: `R$ ${g.price.toFixed(2)}`,
-        rating: g.rating,
-        storeCount: g.storeCount,
-        thumbnail: g.thumbnail,
-        affiliate_url: trackUrl(amazonUrl, g.name)
+        name: d.name,
+        price: `R$ ${d.price.toFixed(2)}`,
+        oldPrice: d.oldPrice ? `R$ ${d.oldPrice.toFixed(2)}` : null,
+        discount: d.discount,
+        thumbnail: d.thumbnail,
+        affiliate_url: trackUrl(amazonUrl, d.name)
       };
     });
 
-    res.json({ success: true, count: games.length, games });
+    res.json({ success: true, count: deals.length, games: deals });
   } catch (error) {
     res.json({ success: false, error: error.message, games: [] });
   }
