@@ -21,6 +21,7 @@ const log = pino({ level: 'silent' });
 let sock;
 let ready = false;
 let lastSent = 0;
+const groupCache = {}; // cache de metadados de grupo (ajuda a criptografar pro grupo)
 
 async function fetchOffer() {
   const url = `${APP_URL}/api/pending-message${PULL_KEY ? '?key=' + encodeURIComponent(PULL_KEY) : ''}`;
@@ -53,10 +54,12 @@ async function sendOffer() {
           return;
         }
       }
-      // 2) carrega os membros do grupo (necessário pra criptografar a mensagem)
+      // 2) carrega os membros do grupo e guarda no cache (necessário pra criptografar)
       try {
-        await sock.groupMetadata(jid);
-        await new Promise(r => setTimeout(r, 2500));
+        const meta = await sock.groupMetadata(jid);
+        groupCache[jid] = meta;
+        console.log(`   → Grupo "${meta.subject}" com ${meta.participants?.length || '?'} membros`);
+        await new Promise(r => setTimeout(r, 3000));
       } catch {}
     } else if (target.includes('@g.us') || target.includes('@s.whatsapp.net')) {
       jid = target;
@@ -64,15 +67,25 @@ async function sendOffer() {
       jid = target.replace(/[^\d]/g, '') + '@s.whatsapp.net';
     }
 
-    // envia (com 1 retry se der "No sessions" logo após entrar no grupo)
-    try {
-      await sock.sendMessage(jid, { text: offer.message });
-    } catch (e) {
-      if (String(e.message).includes('No sessions') || String(e.message).includes('session')) {
-        console.log('   ⏳ Preparando sessão do grupo, tentando de novo em 5s...');
-        await new Promise(r => setTimeout(r, 5000));
+    // envia com até 4 tentativas (sessão do grupo pode demorar a montar)
+    let enviado = false;
+    for (let tentativa = 1; tentativa <= 4 && !enviado; tentativa++) {
+      try {
         await sock.sendMessage(jid, { text: offer.message });
-      } else { throw e; }
+        enviado = true;
+      } catch (e) {
+        const msg = String(e.message || '');
+        if (msg.includes('No sessions') || msg.toLowerCase().includes('session')) {
+          console.log(`   ⏳ Tentativa ${tentativa}/4 falhou (sessão do grupo). Aguardando 8s...`);
+          await new Promise(r => setTimeout(r, 8000));
+        } else { throw e; }
+      }
+    }
+    if (!enviado) {
+      console.log('❌ Não consegui enviar no grupo após 4 tentativas.');
+      console.log('   POSSÍVEL CAUSA: o grupo exige APROVAÇÃO de admin, então a conta entrou como PENDENTE.');
+      console.log('   SOLUÇÃO: adicione esta conta no grupo manualmente (como membro), ou desative a aprovação de novos membros.');
+      return;
     }
     lastSent = Date.now();
     console.log(`✅ [${new Date().toLocaleString('pt-BR')}] Enviado (${offer.count} ofertas) para ${target}`);
@@ -113,7 +126,8 @@ async function start() {
     printQRInTerminal: false,
     syncFullHistory: false,        // não baixa histórico (reduz erros Bad MAC)
     markOnlineOnConnect: false,
-    getMessage: async () => undefined
+    getMessage: async () => undefined,
+    cachedGroupMetadata: async (jid) => groupCache[jid]
   });
 
   sock.ev.on('creds.update', saveCreds);
