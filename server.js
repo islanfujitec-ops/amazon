@@ -575,12 +575,17 @@ app.get('/api/best-prices', async (req, res) => {
   }
 });
 
-// Monta a mensagem com as PROMOÇÕES REAIS (reduções de preço do Compara Jogos),
-// respeitando o desconto mínimo e a quantidade configurados. Link de afiliado + rastreio.
+// Monta a mensagem do WhatsApp.
+// IMPORTANTE (honestidade): o Compara Jogos é usado só como RADAR — ele indica quais
+// jogos estão em promoção no mercado (lojas especializadas). Esses preços NÃO são da
+// Amazon, então NÃO são exibidos na mensagem: mostrar preço de uma loja com link de
+// outra seria enganoso. A mensagem leva o nome do jogo + link da Amazon com a sua tag
+// (comissão garantida). Quando a Creators API for liberada, passamos a exibir o preço
+// REAL da Amazon e o link direto do produto — o código já está preparado.
 async function composeOffersMessage(config) {
   const minDiscount = config.minDiscount || 0;
   const limit = config.perBrand || 5;
-  const tag = config.partnerTag || undefined;
+  const tagFinal = config.partnerTag || process.env.AMAZON_PARTNER_TAG || 'tabuleiro3605-20';
 
   let deals = [];
   try {
@@ -589,27 +594,21 @@ async function composeOffersMessage(config) {
     console.error('Erro Compara Jogos:', e.message);
   }
 
-  // filtra pelo desconto mínimo e limita a quantidade
+  // Radar: jogos com queda de preço no mercado, filtrados pelo desconto mínimo
   const selected = deals.filter(d => d.discount >= minDiscount).slice(0, limit);
 
-  let message = '🎲 *OFERTAS DE JOGOS - TABULEIRO360*\n\n';
+  let message = '🎲 *JOGOS EM DESTAQUE - TABULEIRO360*\n\n';
   message += `_${new Date().toLocaleString('pt-BR')}_\n\n`;
+  message += 'Jogos com queda de preço no mercado. Confira na Amazon:\n\n';
 
   selected.forEach((d, i) => {
     // Busca escopada em Brinquedos e Jogos (i=toys) pra o jogo aparecer certeiro em 1º
-    const tagFinal = tag || process.env.AMAZON_PARTNER_TAG || 'tabuleiro3605-20';
     const amazonUrl = `https://www.amazon.com.br/s?k=${encodeURIComponent(d.name)}&i=toys&tag=${tagFinal}`;
-    const url = trackUrl(amazonUrl, d.name);
     message += `*${i + 1}. ${d.name}*\n`;
-    if (d.oldPrice) {
-      message += `💰 R$ ${d.price.toFixed(2)} ~(de R$ ${d.oldPrice.toFixed(2)})~ 🔥 ${d.discount}% OFF\n`;
-    } else {
-      message += `💰 R$ ${d.price.toFixed(2)}\n`;
-    }
-    message += `🔗 ${url}\n\n`;
+    message += `🔗 ${trackUrl(amazonUrl, d.name)}\n\n`;
   });
 
-  message += '_Ofertas Amazon — aproveite! 💸_';
+  message += '_Preços e disponibilidade na Amazon 💸_';
   return { message, count: selected.length };
 }
 

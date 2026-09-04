@@ -163,6 +163,22 @@
                             <p>⏳ Verificando...</p>
                         </div>
                     </div>
+
+                    <div style="margin-top:25px; background:#fffbea; border-left:4px solid #f6ad55; padding:18px; border-radius:8px;">
+                        <h4 style="color:#975a16; margin-bottom:10px;">🔑 O que falta para ficar 100%</h4>
+                        <p style="color:#744210; font-size:0.92em; line-height:1.6;">
+                            Falta a Amazon <strong>liberar a Creators API</strong> para a sua conta. Enquanto isso:
+                        </p>
+                        <ul style="color:#744210; font-size:0.92em; line-height:1.7; margin:10px 0 10px 18px;">
+                            <li>✅ <strong>Já funciona:</strong> envio automático no WhatsApp com o <strong>seu link de afiliado</strong> (comissão é sua) e as métricas de cliques.</li>
+                            <li>⏳ <strong>Falta:</strong> mostrar o <strong>preço real da Amazon</strong> e abrir a <strong>página exata do produto</strong> (hoje abre a busca).</li>
+                        </ul>
+                        <p style="color:#744210; font-size:0.92em; line-height:1.6;">
+                            <strong>Como destravar:</strong> em Associados Amazon → Ferramentas → CreatorsAPI, confirme se o acesso está ativo.
+                            Se continuar dizendo "não elegível" mesmo com as vendas feitas, abra um chamado no suporte de Associados
+                            pedindo a liberação da API. Assim que liberarem, o site passa a mostrar preço real e link direto <strong>sozinho</strong> — o código já está pronto.
+                        </p>
+                    </div>
                 </div>
             </div>
 
@@ -362,7 +378,11 @@
                         el.innerHTML = '<div class="status-box"><p>❌ Não consegui puxar agora. Tente de novo.</p></div>';
                         return;
                     }
-                    let html = `<div class="status-box success"><h3>🔥 ${data.count} promoções (maior desconto) — links prontos!</h3></div>`;
+                    let html = `<div class="status-box success"><h3>🔥 ${data.count} jogos com queda de preço no mercado</h3>
+                        <p style="font-size:0.9em; color:#666; margin-top:8px;">
+                        <strong>Como ler:</strong> o preço abaixo é de <u>lojas especializadas</u> (fonte: Compara Jogos) e serve de <strong>radar</strong> — indica quais jogos estão baixando.
+                        O botão abre a <strong>busca na Amazon com o seu link de afiliado</strong> (a comissão é sua). O preço na Amazon pode ser diferente.
+                        </p></div>`;
                     data.games.forEach((g, i) => {
                         const desc = g.discount ? `<span style="color:#e53e3e; font-weight:bold;">🔥 ${g.discount}% OFF</span>` : '';
                         const de = g.oldPrice ? `<span style="text-decoration:line-through; color:#999; font-size:0.85em;"> de ${g.oldPrice}</span>` : '';
@@ -370,8 +390,9 @@
                             ${g.thumbnail ? `<img src="${g.thumbnail}" alt="" style="width:60px; height:60px; object-fit:contain; border-radius:8px;" onerror="this.style.display='none'">` : ''}
                             <div style="flex:1;">
                                 <h4>${i+1}. ${g.name}</h4>
-                                <div class="product-price">${g.price}${de} ${desc}</div>
-                                <a href="${g.affiliate_url}" target="_blank" class="product-btn">🔗 Ver na Amazon (seu link)</a>
+                                <div class="product-price" style="font-size:1.1em;">${g.price}${de} ${desc}</div>
+                                <div style="font-size:0.75em; color:#999; margin-bottom:6px;">preço em loja especializada (referência)</div>
+                                <a href="${g.affiliate_url}" target="_blank" class="product-btn">🔗 Buscar na Amazon (seu link de afiliado)</a>
                             </div>
                         </div>`;
                     });
