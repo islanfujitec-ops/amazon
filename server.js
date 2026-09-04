@@ -595,7 +595,10 @@ async function composeOffersMessage(config) {
   message += `_${new Date().toLocaleString('pt-BR')}_\n\n`;
 
   selected.forEach((d, i) => {
-    const url = trackUrl(buildSearchUrl(d.name, tag), d.name);
+    // Busca escopada em Brinquedos e Jogos (i=toys) pra o jogo aparecer certeiro em 1º
+    const tagFinal = tag || process.env.AMAZON_PARTNER_TAG || 'tabuleiro3605-20';
+    const amazonUrl = `https://www.amazon.com.br/s?k=${encodeURIComponent(d.name)}&i=toys&tag=${tagFinal}`;
+    const url = trackUrl(amazonUrl, d.name);
     message += `*${i + 1}. ${d.name}*\n`;
     if (d.oldPrice) {
       message += `💰 R$ ${d.price.toFixed(2)} ~(de R$ ${d.oldPrice.toFixed(2)})~ 🔥 ${d.discount}% OFF\n`;
