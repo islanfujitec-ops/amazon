@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const { searchAmazonProducts, getProductByASIN, debugApi } = require('./lib/amazonApi');
 const { buildSearchUrl, buildOfferUrl } = require('./lib/amazonLinks');
 const { sendViaEvolution, getEvolutionStatus, isEvolutionConfigured } = require('./lib/whatsappSender');
-const { fetchComparaJogos } = require('./lib/comparaJogos');
+const { fetchComparaJogos, fetchPriceReductions } = require('./lib/comparaJogos');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -574,21 +574,37 @@ app.get('/api/best-prices', async (req, res) => {
   }
 });
 
-// Monta a mensagem de ofertas (marcas + categorias) com links rastreados. Reutilizável.
-function composeOffersMessage(config, limit) {
-  const items = config.products || [];
-  const n = limit || items.length;
-  const selected = items.slice(0, n).map(p => ({
-    title: p.title,
-    type: p.type || 'marca',
-    affiliate_url: trackUrl(buildOfferUrl(p.title, config.partnerTag || undefined), p.title)
-  }));
+// Monta a mensagem com as PROMOÇÕES REAIS (reduções de preço do Compara Jogos),
+// respeitando o desconto mínimo e a quantidade configurados. Link de afiliado + rastreio.
+async function composeOffersMessage(config) {
+  const minDiscount = config.minDiscount || 0;
+  const limit = config.perBrand || 5;
+  const tag = config.partnerTag || undefined;
 
-  let message = '🎲 *MELHORES OFERTAS - TABULEIRO360*\n\n';
-  message += `_Atualizado em ${new Date().toLocaleString('pt-BR')}_\n\n`;
-  selected.forEach((item, index) => {
-    message += `*${index + 1}. ${item.title}*\n🔗 ${item.affiliate_url}\n\n`;
+  let deals = [];
+  try {
+    deals = await fetchPriceReductions();
+  } catch (e) {
+    console.error('Erro Compara Jogos:', e.message);
+  }
+
+  // filtra pelo desconto mínimo e limita a quantidade
+  const selected = deals.filter(d => d.discount >= minDiscount).slice(0, limit);
+
+  let message = '🎲 *OFERTAS DE JOGOS - TABULEIRO360*\n\n';
+  message += `_${new Date().toLocaleString('pt-BR')}_\n\n`;
+
+  selected.forEach((d, i) => {
+    const url = trackUrl(buildSearchUrl(d.name, tag), d.name);
+    message += `*${i + 1}. ${d.name}*\n`;
+    if (d.oldPrice) {
+      message += `💰 R$ ${d.price.toFixed(2)} ~(de R$ ${d.oldPrice.toFixed(2)})~ 🔥 ${d.discount}% OFF\n`;
+    } else {
+      message += `💰 R$ ${d.price.toFixed(2)}\n`;
+    }
+    message += `🔗 ${url}\n\n`;
   });
+
   message += '_Ofertas Amazon — aproveite! 💸_';
   return { message, count: selected.length };
 }
@@ -602,17 +618,13 @@ app.get('/api/pending-message', async (req, res) => {
       return res.status(401).json({ error: 'chave inválida' });
     }
     const config = await loadConfig();
-    if (!config.products || config.products.length === 0) {
-      await monitorPrices();
-    }
-    const fresh = await loadConfig();
-    const { message, count } = composeOffersMessage(fresh, parseInt(req.query.limit) || undefined);
+    const { message, count } = await composeOffersMessage(config);
     res.json({
-      target: fresh.whatsappNumber || '',
+      target: config.whatsappNumber || '',
       message,
       count,
-      frequencyMinutes: fresh.frequency || 60,
-      autoSend: fresh.sendAlerts !== false
+      frequencyMinutes: config.frequency || 60,
+      autoSend: config.sendAlerts !== false
     });
   } catch (error) {
     res.json({ error: error.message });
@@ -629,44 +641,24 @@ app.post('/api/send-best-prices', async (req, res) => {
       return res.json({ success: false, error: 'Configure um número ou grupo WhatsApp primeiro' });
     }
 
-    // Garante que os itens (marcas + categorias) estejam gerados
-    let items = config.products;
-    if (!items || items.length === 0) {
-      items = await monitorPrices();
+    // Usa a mesma lógica do envio automático: promoções reais filtradas por desconto/quantidade
+    const { message, count } = await composeOffersMessage(config);
+    if (count === 0) {
+      return res.json({ success: false, error: 'Nenhuma oferta com o desconto mínimo configurado. Baixe o "Desconto mínimo" nas Configurações.' });
     }
-
-    // Limite opcional; por padrão envia todas as marcas/categorias configuradas
-    const limit = parseInt(req.body.limit) || items.length;
-    const selected = items.slice(0, limit).map(p => ({
-      title: p.title,
-      type: p.type || 'marca',
-      // Link passa pelo rastreador /r (conta clique) e redireciona pra oferta com a tag do servidor
-      affiliate_url: trackUrl(buildOfferUrl(p.title), p.title)
-    }));
-
-    let message = '🎲 *MELHORES OFERTAS - TABULEIRO360*\n\n';
-    message += `_Atualizado em ${new Date().toLocaleString('pt-BR')}_\n\n`;
-    message += 'Clique e veja as ofertas com o melhor preço:\n\n';
-
-    selected.forEach((item, index) => {
-      message += `*${index + 1}. ${item.title}*\n`;
-      message += `🔗 ${item.affiliate_url}\n\n`;
-    });
-
-    message += '_Ofertas Amazon atualizadas — aproveite! 💸_';
 
     // Se a Evolution API estiver configurada, ENVIA sozinho (100% automático).
     // Senão, devolve o link wa.me (envio 1-clique) como fallback.
     if (isEvolutionConfigured()) {
       const sent = await sendViaEvolution(whatsapp, message);
       if (sent.success) {
-        console.log(`Enviado automaticamente via Evolution para ${whatsapp} (${selected.length} itens)`);
+        console.log(`Enviado automaticamente via Evolution para ${whatsapp} (${count} ofertas)`);
         return res.json({
           success: true,
           sent: true,
           message: `✅ Enviado automaticamente para ${whatsapp}!`,
-          count: selected.length,
-          products: selected
+          count,
+          products: []
         });
       }
       console.log('Evolution falhou, usando fallback:', sent.error);
@@ -683,7 +675,7 @@ app.post('/api/send-best-prices', async (req, res) => {
       whatsappLink = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`;
     }
 
-    console.log(`Mensagem de ofertas gerada para ${whatsapp} (${selected.length} itens)`);
+    console.log(`Mensagem de ofertas gerada para ${whatsapp} (${count} ofertas)`);
 
     res.json({
       success: true,
@@ -692,8 +684,8 @@ app.post('/api/send-best-prices', async (req, res) => {
       messageText: message,
       message: isGroup ? 'Abra o grupo e cole a mensagem (copie abaixo)' : 'Clique no link abaixo para enviar no WhatsApp',
       whatsappLink: whatsappLink,
-      count: selected.length,
-      products: selected
+      count,
+      products: []
     });
   } catch (error) {
     res.json({ success: false, error: error.message });
