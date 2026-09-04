@@ -54,30 +54,43 @@ async function sendOffer() {
           return;
         }
       }
-      // 2) carrega os membros do grupo e guarda no cache (necessário pra criptografar)
+      // 2) carrega os membros e FORÇA a criação das sessões de criptografia (isso resolve o "No sessions")
       try {
         const meta = await sock.groupMetadata(jid);
         groupCache[jid] = meta;
-        console.log(`   → Grupo "${meta.subject}" com ${meta.participants?.length || '?'} membros`);
-        await new Promise(r => setTimeout(r, 3000));
-      } catch {}
+        const participants = (meta.participants || []).map(p => p.id);
+        console.log(`   → Grupo "${meta.subject}" com ${participants.length} membros`);
+        if (typeof sock.assertSessions === 'function' && participants.length) {
+          await sock.assertSessions(participants, true); // busca as chaves e cria as sessões ANTES de enviar
+          console.log('   → Sessões de criptografia preparadas ✅');
+        }
+        await new Promise(r => setTimeout(r, 2000));
+      } catch (e) {
+        console.log('   (aviso ao preparar sessões:', e.message + ')');
+      }
     } else if (target.includes('@g.us') || target.includes('@s.whatsapp.net')) {
       jid = target;
     } else {
       jid = target.replace(/[^\d]/g, '') + '@s.whatsapp.net';
     }
 
-    // envia com até 4 tentativas (sessão do grupo pode demorar a montar)
+    // envia com até 5 tentativas (re-força as sessões a cada tentativa)
     let enviado = false;
-    for (let tentativa = 1; tentativa <= 4 && !enviado; tentativa++) {
+    for (let tentativa = 1; tentativa <= 5 && !enviado; tentativa++) {
       try {
         await sock.sendMessage(jid, { text: offer.message });
         enviado = true;
       } catch (e) {
         const msg = String(e.message || '');
         if (msg.includes('No sessions') || msg.toLowerCase().includes('session')) {
-          console.log(`   ⏳ Tentativa ${tentativa}/4 falhou (sessão do grupo). Aguardando 8s...`);
-          await new Promise(r => setTimeout(r, 8000));
+          console.log(`   ⏳ Tentativa ${tentativa}/5 falhou. Recriando sessões e aguardando 6s...`);
+          try {
+            if (groupCache[jid] && typeof sock.assertSessions === 'function') {
+              const parts = (groupCache[jid].participants || []).map(p => p.id);
+              await sock.assertSessions(parts, true);
+            }
+          } catch {}
+          await new Promise(r => setTimeout(r, 6000));
         } else { throw e; }
       }
     }
