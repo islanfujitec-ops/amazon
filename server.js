@@ -19,9 +19,9 @@ function trackUrl(target, label) {
   return `${BASE_URL}/r?to=${encodeURIComponent(target)}&label=${encodeURIComponent(label)}`;
 }
 
-// Credenciais padrão (pode mudar depois)
-const DEFAULT_USERNAME = 'admin';
-const DEFAULT_PASSWORD = 'admin';
+// Login vem das variáveis de ambiente (seguro, fora do GitHub). Fallback só p/ dev local.
+const DEFAULT_USERNAME = process.env.AUTH_USER || 'admin';
+const DEFAULT_PASSWORD = process.env.AUTH_PASS || 'admin';
 const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 horas
 
 // Middleware
