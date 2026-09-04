@@ -1,178 +1,131 @@
-// TABULEIRO360 - Enviador automático de WhatsApp (roda no Windows Server, SEM Docker)
-// Conecta seu WhatsApp por QR Code e, no intervalo configurado, busca as ofertas
-// no app (Vercel) e envia no seu grupo. Só faz conexão de SAÍDA — não precisa abrir porta.
+// TABULEIRO360 - Enviador automático de WhatsApp (whatsapp-web.js)
+// Usa o WhatsApp Web real num navegador (igual ao Radar Petronect que funciona),
+// o que resolve o erro "not-acceptable"/LID do Baileys. Sem Docker.
+// Conecta por QR, e no intervalo configurado busca as ofertas no app e envia no grupo/número.
 
-const {
-  default: makeWASocket,
-  useMultiFileAuthState,
-  DisconnectReason,
-  fetchLatestBaileysVersion
-} = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
-const axios = require('axios');
-const pino = require('pino');
+import "dotenv/config";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import qrcode from "qrcode-terminal";
+import axios from "axios";
+import pkg from "whatsapp-web.js";
 
-// ===== CONFIG (edite só se precisar) =====
-const APP_URL = process.env.APP_URL || 'https://tabuleiro360.vercel.app';
-const PULL_KEY = process.env.WA_PULL_KEY || ''; // se você setar WA_PULL_KEY no Vercel, coloque a mesma aqui
-// ==========================================
+const { Client, LocalAuth } = pkg;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const log = pino({ level: 'silent' });
-let sock;
+// ===== CONFIG =====
+const APP_URL = process.env.APP_URL || "https://tabuleiro360.vercel.app";
+const PULL_KEY = process.env.WA_PULL_KEY || "";
+// ==================
+
 let ready = false;
 let lastSent = 0;
-const groupCache = {}; // cache de metadados de grupo (ajuda a criptografar pro grupo)
 
 async function fetchOffer() {
-  const url = `${APP_URL}/api/pending-message${PULL_KEY ? '?key=' + encodeURIComponent(PULL_KEY) : ''}`;
+  const url = `${APP_URL}/api/pending-message${PULL_KEY ? "?key=" + encodeURIComponent(PULL_KEY) : ""}`;
   const { data } = await axios.get(url, { timeout: 20000 });
   return data;
 }
 
-// Resolve o destino (link de grupo -> JID, número -> JID) e envia
-async function sendOffer() {
+async function sendHeartbeat() {
+  try {
+    await axios.post(
+      `${APP_URL}/api/heartbeat${PULL_KEY ? "?key=" + encodeURIComponent(PULL_KEY) : ""}`,
+      { whatsappConnected: ready, lastSent: lastSent || null },
+      { timeout: 12000 }
+    );
+  } catch { /* ignora */ }
+}
+
+// Resolve o destino num chatId válido do whatsapp-web.js
+async function resolverChatId(client, alvo) {
+  const raw = String(alvo || "").trim();
+  if (!raw) return null;
+
+  // Link de convite de grupo -> entra e pega o id (@g.us)
+  if (raw.includes("chat.whatsapp.com")) {
+    const code = raw.split("chat.whatsapp.com/")[1].split(/[?/]/)[0];
+    try {
+      const groupId = await client.acceptInvite(code); // entra no grupo (ou retorna id se já membro)
+      return groupId.includes("@g.us") ? groupId : `${groupId}@g.us`;
+    } catch (e) {
+      try {
+        const info = await client.getInviteInfo(code);
+        const id = info?.id?._serialized || info?.id;
+        if (id) return String(id).includes("@g.us") ? id : `${id}@g.us`;
+      } catch { /* segue */ }
+      throw new Error("não consegui acessar o grupo pelo link (a conta precisa poder entrar)");
+    }
+  }
+
+  // Já é um id pronto (@g.us / @c.us)
+  if (raw.includes("@")) return raw;
+
+  // Número -> resolve o id real (trata o esquema novo LID; montar na mão dá erro)
+  const digitos = raw.replace(/\D/g, "");
+  const numId = await client.getNumberId(digitos);
+  if (!numId) throw new Error(`o número ${digitos} não está no WhatsApp (confira 55 + DDD)`);
+  return numId._serialized;
+}
+
+async function sendOffer(client) {
   try {
     const offer = await fetchOffer();
-    if (!offer || !offer.message) { console.log('⚠️ Sem mensagem para enviar.'); return; }
-    if (offer.autoSend === false) { console.log('⏸️ Envio automático desligado no painel.'); return; }
-    if (!offer.target) { console.log('⚠️ Configure o grupo/número no painel (aba Configurações).'); return; }
+    if (!offer || !offer.message) { console.log("⚠️ Sem mensagem para enviar."); return; }
+    if (offer.autoSend === false) { console.log("⏸️ Envio automático desligado no painel."); return; }
+    if (!offer.target) { console.log("⚠️ Configure o grupo/número no painel (aba Configurações)."); return; }
 
-    let jid;
-    const target = offer.target.trim();
-    if (target.includes('chat.whatsapp.com')) {
-      const code = target.split('chat.whatsapp.com/')[1].split(/[?/]/)[0];
-      // 1) tenta ENTRAR no grupo (necessário pra enviar). Se já for membro, cai no catch.
-      try {
-        jid = await sock.groupAcceptInvite(code);
-        console.log('   → Entrei no grupo:', jid);
-      } catch (e) {
-        try {
-          const info = await sock.groupGetInviteInfo(code);
-          jid = info.id;
-        } catch (e2) {
-          console.log('❌ Não consegui acessar o grupo. A conta do WhatsApp precisa ser MEMBRO do grupo.');
-          return;
-        }
-      }
-      // 2) carrega os membros e FORÇA a criação das sessões de criptografia (isso resolve o "No sessions")
-      try {
-        const meta = await sock.groupMetadata(jid);
-        groupCache[jid] = meta;
-        const participants = (meta.participants || []).map(p => p.id);
-        console.log(`   → Grupo "${meta.subject}" com ${participants.length} membros`);
-        if (typeof sock.assertSessions === 'function' && participants.length) {
-          await sock.assertSessions(participants, true); // busca as chaves e cria as sessões ANTES de enviar
-          console.log('   → Sessões de criptografia preparadas ✅');
-        }
-        await new Promise(r => setTimeout(r, 2000));
-      } catch (e) {
-        console.log('   (aviso ao preparar sessões:', e.message + ')');
-      }
-    } else if (target.includes('@g.us') || target.includes('@s.whatsapp.net')) {
-      jid = target;
-    } else {
-      jid = target.replace(/[^\d]/g, '') + '@s.whatsapp.net';
-    }
-
-    // envia com até 5 tentativas (re-força as sessões a cada tentativa)
-    let enviado = false;
-    for (let tentativa = 1; tentativa <= 5 && !enviado; tentativa++) {
-      try {
-        await sock.sendMessage(jid, { text: offer.message });
-        enviado = true;
-      } catch (e) {
-        const msg = String(e.message || '');
-        if (msg.includes('No sessions') || msg.toLowerCase().includes('session')) {
-          console.log(`   ⏳ Tentativa ${tentativa}/5 falhou. Recriando sessões e aguardando 6s...`);
-          try {
-            if (groupCache[jid] && typeof sock.assertSessions === 'function') {
-              const parts = (groupCache[jid].participants || []).map(p => p.id);
-              await sock.assertSessions(parts, true);
-            }
-          } catch {}
-          await new Promise(r => setTimeout(r, 6000));
-        } else { throw e; }
-      }
-    }
-    if (!enviado) {
-      console.log('❌ Não consegui enviar no grupo após 4 tentativas.');
-      console.log('   POSSÍVEL CAUSA: o grupo exige APROVAÇÃO de admin, então a conta entrou como PENDENTE.');
-      console.log('   SOLUÇÃO: adicione esta conta no grupo manualmente (como membro), ou desative a aprovação de novos membros.');
-      return;
-    }
+    const chatId = await resolverChatId(client, offer.target);
+    await client.sendMessage(chatId, offer.message);
     lastSent = Date.now();
-    console.log(`✅ [${new Date().toLocaleString('pt-BR')}] Enviado (${offer.count} ofertas) para ${target}`);
+    console.log(`✅ [${new Date().toLocaleString("pt-BR")}] Enviado (${offer.count} ofertas) para ${offer.target}`);
   } catch (e) {
-    console.log('❌ Erro ao enviar:', e.response?.data || e.message);
+    console.log("❌ Erro ao enviar:", e.message);
   }
 }
 
-async function sendHeartbeat() {
+async function loop(client) {
   try {
-    await axios.post(`${APP_URL}/api/heartbeat${PULL_KEY ? '?key=' + encodeURIComponent(PULL_KEY) : ''}`,
-      { whatsappConnected: ready, lastSent: lastSent || null },
-      { timeout: 12000 });
-  } catch {}
-}
-
-async function loop() {
-  try {
-    await sendHeartbeat(); // avisa o painel que está vivo
+    await sendHeartbeat();
     const offer = await fetchOffer().catch(() => null);
-    const freq = (offer && offer.frequencyMinutes) ? offer.frequencyMinutes : 60;
+    const freq = offer && offer.frequencyMinutes ? offer.frequencyMinutes : 60;
     const elapsedMin = (Date.now() - lastSent) / 60000;
     if (ready && elapsedMin >= freq) {
-      await sendOffer();
+      await sendOffer(client);
     }
-  } catch {}
-  setTimeout(loop, 60000); // checa a cada 1 minuto (heartbeat + se já passou o intervalo)
+  } catch { /* ignora */ }
+  setTimeout(() => loop(client), 60000);
 }
 
-async function start() {
-  const { state, saveCreds } = await useMultiFileAuthState('sessao_whatsapp');
-  const { version } = await fetchLatestBaileysVersion();
+console.log("=== TABULEIRO360 - Enviador de WhatsApp (whatsapp-web.js) ===");
+console.log("App:", APP_URL);
 
-  sock = makeWASocket({
-    version,
-    auth: state,
-    logger: log,
-    printQRInTerminal: false,
-    syncFullHistory: false,        // não baixa histórico (reduz erros Bad MAC)
-    markOnlineOnConnect: false,
-    getMessage: async () => undefined,
-    cachedGroupMetadata: async (jid) => groupCache[jid]
-  });
+const client = new Client({
+  authStrategy: new LocalAuth({ dataPath: path.join(__dirname, "data", ".wwebjs_auth") }),
+  puppeteer: { headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] }
+});
 
-  sock.ev.on('creds.update', saveCreds);
+client.on("qr", (qr) => {
+  console.log("\n📱 ESCANEIE O QR CODE ABAIXO COM SEU WHATSAPP:");
+  console.log("   (WhatsApp > Aparelhos conectados > Conectar aparelho)\n");
+  qrcode.generate(qr, { small: true });
+});
 
-  sock.ev.on('connection.update', (u) => {
-    const { connection, lastDisconnect, qr } = u;
-    if (qr) {
-      console.log('\n📱 ESCANEIE O QR CODE ABAIXO COM SEU WHATSAPP:\n');
-      console.log('   (WhatsApp > Aparelhos conectados > Conectar aparelho)\n');
-      qrcode.generate(qr, { small: true });
-    }
-    if (connection === 'open') {
-      ready = true;
-      console.log('\n✅ WHATSAPP CONECTADO! O envio automático está ativo.');
-      console.log('   Deixe esta janela ABERTA. Ela envia as ofertas sozinha no intervalo configurado.\n');
-      // envia uma vez logo ao conectar
-      setTimeout(sendOffer, 5000);
-    }
-    if (connection === 'close') {
-      ready = false;
-      const code = lastDisconnect?.error?.output?.statusCode;
-      if (code === DisconnectReason.loggedOut) {
-        console.log('❌ Sessão encerrada. Apague a pasta "sessao_whatsapp" e rode de novo para reconectar.');
-      } else {
-        console.log('🔄 Conexão caiu, reconectando...');
-        start();
-      }
-    }
-  });
-}
+client.on("authenticated", () => console.log("[WhatsApp] Autenticado."));
+client.on("auth_failure", (m) => console.error("[WhatsApp] Falha de autenticação:", m));
 
-console.log('=== TABULEIRO360 - Enviador de WhatsApp ===');
-console.log('App:', APP_URL);
-start();
-loop();
+client.on("ready", () => {
+  ready = true;
+  console.log("\n✅ WHATSAPP CONECTADO! O envio automático está ativo.");
+  console.log("   Deixe esta janela ABERTA. Ela envia as ofertas sozinha no intervalo configurado.\n");
+  setTimeout(() => sendOffer(client), 5000); // envia uma vez ao conectar
+});
+
+client.on("disconnected", (r) => {
+  ready = false;
+  console.error("[WhatsApp] Desconectado:", r, "- reiniciando...");
+  setTimeout(() => client.initialize().catch((e) => console.error(e.message)), 5000);
+});
+
+client.initialize().catch((e) => console.error("Erro ao iniciar:", e.message));
+loop(client);

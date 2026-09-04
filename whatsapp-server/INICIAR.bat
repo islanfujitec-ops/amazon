@@ -4,32 +4,27 @@ title TABULEIRO360 - Enviador de WhatsApp
 cd /d "%~dp0"
 
 echo ============================================
-echo   TABULEIRO360 - Enviador de WhatsApp
+echo   TABULEIRO360 - Enviador de WhatsApp v2
 echo ============================================
 echo.
 
-REM Verifica se o Node.js esta instalado
 where node >nul 2>nul
 if errorlevel 1 (
     echo [ERRO] Node.js NAO encontrado.
-    echo.
-    echo Instale o Node.js primeiro:
-    echo   1. Abra: https://nodejs.org
-    echo   2. Baixe a versao LTS ^(botao verde^)
-    echo   3. Instale ^(next, next, finish^)
-    echo   4. Rode este INICIAR.bat de novo
+    echo Instale em https://nodejs.org ^(versao LTS^) e rode de novo.
     echo.
     pause
     exit /b
 )
 
-echo [OK] Node.js encontrado:
+echo [OK] Node.js:
 node --version
 echo.
 
-REM Instala as dependencias na primeira vez
-if not exist "node_modules" (
-    echo [1/2] Instalando dependencias ^(so na primeira vez, pode demorar 1-2 min^)...
+REM Instala as dependencias. Na 1a vez baixa o navegador (Chromium) - pode demorar 3-5 min.
+if not exist "node_modules\whatsapp-web.js" (
+    echo [1/2] Instalando dependencias + navegador ^(1a vez: pode demorar 3-5 min^)...
+    echo       NAO feche a janela. Aguarde ate aparecer o QR Code.
     call npm install
     echo.
 ) else (
