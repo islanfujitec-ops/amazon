@@ -61,8 +61,17 @@ async function sendOffer() {
   }
 }
 
+async function sendHeartbeat() {
+  try {
+    await axios.post(`${APP_URL}/api/heartbeat${PULL_KEY ? '?key=' + encodeURIComponent(PULL_KEY) : ''}`,
+      { whatsappConnected: ready, lastSent: lastSent || null },
+      { timeout: 12000 });
+  } catch {}
+}
+
 async function loop() {
   try {
+    await sendHeartbeat(); // avisa o painel que está vivo
     const offer = await fetchOffer().catch(() => null);
     const freq = (offer && offer.frequencyMinutes) ? offer.frequencyMinutes : 60;
     const elapsedMin = (Date.now() - lastSent) / 60000;
@@ -70,7 +79,7 @@ async function loop() {
       await sendOffer();
     }
   } catch {}
-  setTimeout(loop, 60000); // checa a cada 1 minuto se já passou o intervalo
+  setTimeout(loop, 60000); // checa a cada 1 minuto (heartbeat + se já passou o intervalo)
 }
 
 async function start() {

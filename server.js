@@ -409,6 +409,40 @@ app.get('/api/compara-jogos', async (req, res) => {
   }
 });
 
+// 🖥️ HEARTBEAT: o servidor Windows avisa que está ativo/conectado
+app.post('/api/heartbeat', async (req, res) => {
+  try {
+    const config = await loadConfig();
+    config.serverStatus = {
+      online: true,
+      whatsappConnected: req.body.whatsappConnected === true,
+      lastSeen: Date.now(),
+      lastSent: req.body.lastSent || config.serverStatus?.lastSent || null
+    };
+    await saveConfig(config);
+    res.json({ ok: true });
+  } catch (error) {
+    res.json({ ok: false, error: error.message });
+  }
+});
+
+// Status do servidor Windows (o painel usa pra mostrar online/offline)
+app.get('/api/server-status', async (req, res) => {
+  try {
+    const config = await loadConfig();
+    const s = config.serverStatus || {};
+    const online = s.lastSeen && (Date.now() - s.lastSeen < 3 * 60 * 1000); // ativo se visto nos últimos 3 min
+    res.json({
+      online: !!online,
+      whatsappConnected: online ? !!s.whatsappConnected : false,
+      lastSeen: s.lastSeen || null,
+      lastSent: s.lastSent || null
+    });
+  } catch (error) {
+    res.json({ online: false, error: error.message });
+  }
+});
+
 // 📈 MÉTRICAS: cliques por marca (mais clicados primeiro)
 app.get('/api/metrics', async (req, res) => {
   try {
