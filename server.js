@@ -540,6 +540,51 @@ app.get('/api/best-prices', async (req, res) => {
   }
 });
 
+// Monta a mensagem de ofertas (marcas + categorias) com links rastreados. Reutilizável.
+function composeOffersMessage(config, limit) {
+  const items = config.products || [];
+  const n = limit || items.length;
+  const selected = items.slice(0, n).map(p => ({
+    title: p.title,
+    type: p.type || 'marca',
+    affiliate_url: trackUrl(buildOfferUrl(p.title, config.partnerTag || undefined), p.title)
+  }));
+
+  let message = '🎲 *MELHORES OFERTAS - TABULEIRO360*\n\n';
+  message += `_Atualizado em ${new Date().toLocaleString('pt-BR')}_\n\n`;
+  selected.forEach((item, index) => {
+    message += `*${index + 1}. ${item.title}*\n🔗 ${item.affiliate_url}\n\n`;
+  });
+  message += '_Ofertas Amazon — aproveite! 💸_';
+  return { message, count: selected.length };
+}
+
+// 📤 O servidor Windows (script Node) busca aqui a mensagem pronta pra enviar no grupo.
+// Protegido por chave (WA_PULL_KEY). Só conexão de SAÍDA — não expõe nada.
+app.get('/api/pending-message', async (req, res) => {
+  try {
+    const key = process.env.WA_PULL_KEY;
+    if (key && req.query.key !== key) {
+      return res.status(401).json({ error: 'chave inválida' });
+    }
+    const config = await loadConfig();
+    if (!config.products || config.products.length === 0) {
+      await monitorPrices();
+    }
+    const fresh = await loadConfig();
+    const { message, count } = composeOffersMessage(fresh, parseInt(req.query.limit) || undefined);
+    res.json({
+      target: fresh.whatsappNumber || '',
+      message,
+      count,
+      frequencyMinutes: fresh.frequency || 60,
+      autoSend: fresh.sendAlerts !== false
+    });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
 // ðŸ“± ENVIAR WHATSAPP - Enviar melhores preÃ§os
 app.post('/api/send-best-prices', async (req, res) => {
   try {

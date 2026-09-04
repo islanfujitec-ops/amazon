@@ -1,0 +1,15 @@
+{
+  "name": "tabuleiro360-whatsapp",
+  "version": "1.0.0",
+  "description": "Envia as ofertas do TABULEIRO360 no WhatsApp automaticamente (roda no Windows Server, sem Docker)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "6.7.9",
+    "axios": "^1.7.2",
+    "qrcode-terminal": "^0.12.0",
+    "pino": "^9.0.0"
+  }
+}
