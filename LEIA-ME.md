@@ -18,39 +18,20 @@ Login: `admintabuleiro@360` / `admintabuleiro@360`
 
 ---
 
-## ⏳ O QUE FALTA (depende da Amazon, não do código)
+## ✅ API DA AMAZON — LIBERADA (07/09/2026)
 
-**Falta a Amazon liberar a Creators API.** Hoje ela responde:
-> `AssociateNotEligible — Your account does not currently meet the eligibility requirements`
+A Creators API foi liberada. Agora o sistema usa **dados reais da Amazon**:
 
-Isso mesmo com as vendas feitas. É uma liberação do lado deles.
+- **Preço real** + **preço cheio riscado** + **% de desconto** (tudo da Amazon)
+- **Link direto do produto** (`/dp/ASIN`) já com a sua tag — não é mais busca
+- **Foto oficial** do produto
 
-### O que muda quando liberarem:
-- Hoje: link abre a **busca** na Amazon (comissão funciona)
-- Depois: link abre a **página exata do produto**, com **preço real da Amazon** e foto
-
-**O código já está pronto** (`lib/amazonApi.js`) — ativa sozinho quando a Amazon liberar.
-
-### Como destravar:
-1. Associados Amazon → Ferramentas → **CreatorsAPI** → ver se o acesso está ativo
-2. Se continuar "não elegível", abrir chamado no **suporte de Associados** pedindo liberação da API
-3. Testar depois em: `https://tabuleiro360.vercel.app/api/amazon/debug`
-   - Se aparecer `"step": "sucesso"` → liberou! Me avise que eu ligo o preço real.
-
----
-
-## ⚠️ IMPORTANTE: por que a mensagem não mostra preço
-
-O **Compara Jogos** mostra preços de **lojas especializadas** (Javali, Alquimista...), **não da Amazon**.
-
-Mostrar "R$ 53 na loja X" com link da Amazon seria **enganoso** — o preço na Amazon é outro.
-Por isso a mensagem do WhatsApp manda **o nome do jogo + o seu link da Amazon**, sem preço inventado.
-
-O Compara Jogos serve como **radar**: aponta quais jogos estão em promoção no mercado — e aí você divulga esses jogos com o seu link.
-
-**Quando a API da Amazon liberar**, passamos a mostrar o preço REAL da Amazon (aí sim, honesto e completo).
-
----
+### Como funciona a busca de ofertas
+1. Pega as suas **marcas** cadastradas (rotaciona 6 por vez, cobre todas ao longo do dia)
+2. Busca cada uma como `"<marca> jogo de tabuleiro"` — isso evita ruído
+   (searchIndex não funciona no marketplace BR; o termo faz o mesmo papel)
+3. Filtra pelo **desconto mínimo** que você configurou (desconto REAL da Amazon)
+4. Ordena pelo maior desconto e envia a quantidade configurada
 
 ## 🖥️ SERVIDOR DE ENVIO (Windows Server)
 
