@@ -74,10 +74,10 @@
         </div>
 
         <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('settings')">⚙️ Configurações</button>
-            <button class="tab-btn" onclick="switchTab('brands')">🏷️ Marcas & Keywords</button>
-            <button class="tab-btn" onclick="switchTab('monitor')">📊 Monitor</button>
-            <button class="tab-btn" onclick="switchTab('metrics')">📈 Métricas</button>
+            <button class="tab-btn active" onclick="switchTab('settings', this)">⚙️ Configurações</button>
+            <button class="tab-btn" onclick="switchTab('brands', this)">🏷️ Marcas & Keywords</button>
+            <button class="tab-btn" onclick="switchTab('monitor', this)">📊 Monitor</button>
+            <button class="tab-btn" onclick="switchTab('metrics', this)">📈 Métricas</button>
         </div>
 
         <div class="content">
@@ -259,8 +259,10 @@
             }
         }
 
-        function switchTab(tabName) {
-            switchTabByName(tabName, event && event.target);
+        function switchTab(tabName, btnEl) {
+            // Recebe o proprio botao (this). Antes usava o 'event' global, que so existe
+            // no Chrome — em outros navegadores dava erro e a aba nao trocava.
+            switchTabByName(tabName, btnEl);
         }
 
         function switchTabByName(tabName, btnEl) {
