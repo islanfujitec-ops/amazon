@@ -606,7 +606,8 @@ async function buscarOfertasAmazon(config) {
   const porAsin = new Map();
   for (const termo of termos) {
     try {
-      const itens = await searchAmazonProducts(termo, 10);
+      // "jogo de tabuleiro" no termo limita a categoria certa (searchIndex nao existe no BR)
+      const itens = await searchAmazonProducts(`${termo} jogo de tabuleiro`, 10);
       for (const item of itens) {
         if (item.asin && item.price) porAsin.set(item.asin, item);
       }
