@@ -10,7 +10,7 @@ import qrcode from "qrcode-terminal";
 import axios from "axios";
 import pkg from "whatsapp-web.js";
 
-const { Client, LocalAuth } = pkg;
+const { Client, LocalAuth, MessageMedia } = pkg;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Acha um navegador Chromium/Chrome/Edge JÁ instalado no servidor (evita baixar).
@@ -111,19 +111,53 @@ async function resolverChatId(client, alvo) {
   return numId._serialized;
 }
 
+// Avisa o site o que ja foi enviado (pra nunca repetir)
+async function marcarEnviados(asins, titles) {
+  try {
+    await axios.post(`${APP_URL}/api/mark-sent`, { asins, titles }, { timeout: 15000 });
+  } catch { /* ignora */ }
+}
+
 async function sendOffer(client) {
   try {
     const offer = await fetchOffer();
-    if (!offer || !offer.message) { console.log("⚠️ Sem mensagem para enviar."); return; }
-    if (offer.autoSend === false) { console.log("⏸️ Envio automático desligado no painel."); return; }
-    if (!offer.target) { console.log("⚠️ Configure o grupo/número no painel (aba Configurações)."); return; }
+    if (!offer) { console.log("Sem resposta do app."); return; }
+    if (offer.autoSend === false) { console.log("Envio automatico desligado no painel."); return; }
+    if (!offer.target) { console.log("Configure o grupo/numero no painel."); return; }
+    if (!offer.offers || !offer.offers.length) {
+      console.log(`[${new Date().toLocaleString("pt-BR")}] Nenhuma oferta nova (as atuais ja foram enviadas).`);
+      lastSent = Date.now();   // espera o proximo ciclo antes de tentar de novo
+      return;
+    }
 
     const chatId = await resolverChatId(client, offer.target);
-    await client.sendMessage(chatId, offer.message);
-    lastSent = Date.now();
-    console.log(`✅ [${new Date().toLocaleString("pt-BR")}] Enviado (${offer.count} ofertas) para ${offer.target}`);
+    const enviados = [], titulos = [];
+
+    // Uma mensagem por jogo: foto + legenda. Pausa entre elas pra nao parecer spam.
+    for (const item of offer.offers) {
+      try {
+        if (item.image) {
+          const media = await MessageMedia.fromUrl(item.image, { unsafeMime: true });
+          await client.sendMessage(chatId, media, { caption: item.caption });
+        } else {
+          await client.sendMessage(chatId, item.caption);
+        }
+        enviados.push(item.asin);
+        titulos.push(item.title);
+        console.log(`  enviado: ${item.title.slice(0, 55)}`);
+        await new Promise(r => setTimeout(r, 4000));
+      } catch (e) {
+        console.log(`  falhou (${item.title.slice(0, 35)}): ${e.message}`);
+      }
+    }
+
+    if (enviados.length) {
+      await marcarEnviados(enviados, titulos);
+      lastSent = Date.now();
+      console.log(`[${new Date().toLocaleString("pt-BR")}] ${enviados.length} ofertas enviadas para ${offer.target}`);
+    }
   } catch (e) {
-    console.log("❌ Erro ao enviar:", e.message);
+    console.log("Erro ao enviar:", e.message);
   }
 }
 

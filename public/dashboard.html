@@ -125,8 +125,11 @@
                         <option value="3">3 melhores</option>
                         <option value="5" selected>5 melhores</option>
                         <option value="10">10 melhores</option>
+                        <option value="20">20 melhores</option>
+                        <option value="50">50 melhores</option>
+                        <option value="100">100 melhores</option>
                     </select>
-                    <small>Quantas ofertas de cada marca o sistema traz</small>
+                    <small>Quantas ofertas por envio (quanto maior, mais marcas o sistema consulta)</small>
                 </div>
 
                 <div class="form-group">
@@ -224,11 +227,20 @@
 
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
                     <button class="btn btn-primary" onclick="monitorPrices()">🔍 Buscar Ofertas Reais (Amazon)</button>
-                    <button class="btn btn-primary" onclick="loadComparaJogos()">🔥 Promoções do Compara Jogos</button>
-                    <button class="btn btn-success" onclick="sendBestPrices()">📤 Enviar no WhatsApp</button>
                 </div>
 
                 <div id="bestPricesResult"></div>
+
+                <div style="margin-top:25px; border-top:1px solid #eee; padding-top:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                        <h3>🕒 Já enviados (não repete)</h3>
+                        <div>
+                            <button class="btn btn-primary" onclick="loadSentHistory()" style="padding:8px 14px; font-size:0.9em;">🔄 Atualizar</button>
+                            <button class="btn btn-danger" onclick="clearSent()" style="padding:8px 14px; font-size:0.9em;">🗑️ Liberar todos</button>
+                        </div>
+                    </div>
+                    <div id="sentHistory" style="margin-top:12px;"><p style="color:#666;">Clique em Atualizar para ver.</p></div>
+                </div>
                 <div id="monitorResult" class="loading"></div>
             </div>
 
@@ -370,40 +382,34 @@
                 });
         }
 
-        function loadComparaJogos() {
-            const el = document.getElementById('monitorResult');
-            el.classList.remove('loading');
-            el.style.display = 'block';
-            el.innerHTML = '<p style="text-align:center; padding:40px;">⏳ Puxando melhores jogos do Compara Jogos...</p>';
-            document.getElementById('bestPricesResult').innerHTML = '';
 
-            fetch('/api/compara-jogos?limit=15')
+        function loadSentHistory() {
+            const el = document.getElementById('sentHistory');
+            el.innerHTML = '<p>Carregando...</p>';
+            fetch('/api/sent-history')
                 .then(r => r.json())
-                .then(data => {
-                    if (!data.success || !data.games.length) {
-                        el.innerHTML = '<div class="status-box"><p>❌ Não consegui puxar agora. Tente de novo.</p></div>';
+                .then(d => {
+                    if (!d.log || !d.log.length) {
+                        el.innerHTML = '<p style="color:#666;">Nada enviado ainda. Quando o servidor enviar, aparece aqui com data e hora.</p>';
                         return;
                     }
-                    let html = `<div class="status-box success"><h3>🔥 ${data.count} jogos com queda de preço no mercado</h3>
-                        <p style="font-size:0.9em; color:#666; margin-top:8px;">
-                        <strong>Como ler:</strong> o preço abaixo é de <u>lojas especializadas</u> (fonte: Compara Jogos) e serve de <strong>radar</strong> — indica quais jogos estão baixando.
-                        O botão abre a <strong>busca na Amazon com o seu link de afiliado</strong> (a comissão é sua). O preço na Amazon pode ser diferente.
-                        </p></div>`;
-                    data.games.forEach((g, i) => {
-                        const desc = g.discount ? `<span style="color:#e53e3e; font-weight:bold;">🔥 ${g.discount}% OFF</span>` : '';
-                        const de = g.oldPrice ? `<span style="text-decoration:line-through; color:#999; font-size:0.85em;"> de ${g.oldPrice}</span>` : '';
-                        html += `<div class="product-card" style="display:flex; gap:15px; align-items:center;">
-                            ${g.thumbnail ? `<img src="${g.thumbnail}" alt="" style="width:60px; height:60px; object-fit:contain; border-radius:8px;" onerror="this.style.display='none'">` : ''}
-                            <div style="flex:1;">
-                                <h4>${i+1}. ${g.name}</h4>
-                                <div class="product-price" style="font-size:1.1em;">${g.price}${de} ${desc}</div>
-                                <div style="font-size:0.75em; color:#999; margin-bottom:6px;">preço em loja especializada (referência)</div>
-                                <a href="${g.affiliate_url}" target="_blank" class="product-btn">🔗 Buscar na Amazon (seu link de afiliado)</a>
-                            </div>
-                        </div>`;
+                    let html = '<p style="color:#666; margin-bottom:10px;">' + d.total + ' jogos ja enviados (nao serao repetidos)</p>';
+                    d.log.forEach(function(it) {
+                        const dt = new Date(it.at).toLocaleString('pt-BR');
+                        html += '<div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">' +
+                            '<span style="flex:1;">' + it.title + '</span>' +
+                            '<span style="color:#999; font-size:0.9em; white-space:nowrap;">' + dt + '</span>' +
+                            '</div>';
                     });
                     el.innerHTML = html;
                 });
+        }
+
+        function clearSent() {
+            if (!confirm('Liberar todos os jogos para serem enviados de novo?')) return;
+            fetch('/api/clear-sent', { method: 'POST' })
+                .then(r => r.json())
+                .then(function() { alert('Historico limpo!'); loadSentHistory(); });
         }
 
         function loadMetrics() {
@@ -427,60 +433,6 @@
                 });
         }
 
-        function sendBestPrices() {
-            fetch('/api/config')
-                .then(r => r.json())
-                .then(cfg => {
-                    const whatsapp = (cfg.whatsappNumber || '').trim();
-                    const digits = whatsapp.replace(/\D/g, '');
-                    const isGroup = whatsapp.includes('chat.whatsapp.com');
-
-                    if (!isGroup && digits.length < 12) {
-                        alert('❌ Configure o link do grupo (chat.whatsapp.com/...) ou um número válido (+55DDNúmero) na aba Configurações!');
-                        switchTabByName('settings');
-                        return;
-                    }
-
-                    fetch('/api/send-best-prices', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ whatsapp })
-                    })
-                    .then(r => r.json())
-                    .then(data => {
-                        if (!data.success) {
-                            alert('❌ ' + data.error);
-                            return;
-                        }
-
-                        let topHtml;
-                        if (data.sent) {
-                            topHtml = `<div class="status-box success"><h3>✅ ${data.count} ofertas ENVIADAS automaticamente!</h3><p>${data.message}</p></div>`;
-                        } else if (data.isGroup) {
-                            topHtml = `<div class="status-box success"><h3>✅ ${data.count} ofertas prontas!</h3>
-                                <p>Grupo: abra e cole a mensagem (copie abaixo):</p>
-                                <textarea readonly style="width:100%; height:120px; margin:10px 0; padding:10px; border-radius:8px; border:1px solid #ddd;">${data.messageText || ''}</textarea>
-                                <a href="${data.whatsappLink}" target="_blank" class="btn btn-success" style="display:block; text-align:center; padding:15px; font-size:1.1em;">📱 Abrir Grupo no WhatsApp</a>
-                            </div>`;
-                        } else {
-                            topHtml = `<div class="status-box success"><h3>✅ ${data.count} ofertas prontas para enviar!</h3>
-                                <a href="${data.whatsappLink}" target="_blank" class="btn btn-success" style="display:block; text-align:center; padding:15px; font-size:1.1em; margin:15px 0;">📱 Enviar no WhatsApp (+${digits})</a>
-                            </div>`;
-                        }
-                        let html = topHtml;
-
-                        (data.products || []).forEach((p, i) => {
-                            html += `<div class="product-card">
-                                <h4>${i+1}. ${p.title} <span style="font-size:0.75em; color:#999;">(${p.type || 'marca'})</span></h4>
-                                <a href="${p.affiliate_url}" target="_blank" class="product-btn">🔗 Ver melhores ofertas na Amazon</a>
-                            </div>`;
-                        });
-
-                        document.getElementById('bestPricesResult').innerHTML = html;
-                        document.getElementById('monitorResult').innerHTML = '';
-                    });
-                });
-        }
 
         function showMsg(id, msg, type) {
             const el = document.getElementById(id);

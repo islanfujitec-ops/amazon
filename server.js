@@ -351,7 +351,7 @@ app.get('/api/monitor', async (req, res) => {
   try {
     const config = await loadConfig();
     // Ofertas REAIS da Amazon (Creators API), filtradas pelo desconto minimo configurado
-    const ofertas = await buscarOfertasAmazon({ ...config, perBrand: parseInt(req.query.limit) || config.perBrand || 10 });
+    const ofertas = await buscarOfertasAmazon(config, { limit: parseInt(req.query.limit) || config.perBrand || 10, ignorarEnviados: true });
     res.json({
       success: true,
       minDiscount: config.minDiscount || 0,
@@ -594,14 +594,17 @@ app.get('/api/best-prices', async (req, res) => {
 // configurado (desconto REAL da Amazon) e monta o link direto do produto com a tag.
 // ponytail: limita a 6 termos por rodada pra nao estourar rate limit; se precisar de
 // mais cobertura, rotacionar os termos entre execucoes.
-async function buscarOfertasAmazon(config) {
+async function buscarOfertasAmazon(config, opcoes = {}) {
   const minDiscount = config.minDiscount || 0;
-  const limit = config.perBrand || 5;
+  const limit = opcoes.limit || config.perBrand || 5;
+  const jaEnviados = opcoes.ignorarEnviados ? {} : (config.sentAsins || {});
+
   // Marcas primeiro (sao especificas de jogos; keywords genericas trazem ruido tipo
-  // "kit banheiro"). Rotaciona pela hora do dia pra cobrir todas as marcas ao longo do dia.
+  // "kit banheiro"). Quanto mais itens pedidos, mais marcas consultamos por rodada.
   const marcas = config.brands || [];
-  const giro = marcas.length ? (new Date().getHours() * 6) % marcas.length : 0;
-  const termos = [...marcas.slice(giro), ...marcas.slice(0, giro)].slice(0, 6);
+  const qtdTermos = Math.min(marcas.length, Math.max(6, Math.ceil(limit / 2)));
+  const giro = marcas.length ? (new Date().getHours() * qtdTermos) % marcas.length : 0;
+  const termos = [...marcas.slice(giro), ...marcas.slice(0, giro)].slice(0, qtdTermos);
 
   const porAsin = new Map();
   for (const termo of termos) {
@@ -609,7 +612,9 @@ async function buscarOfertasAmazon(config) {
       // "jogo de tabuleiro" no termo limita a categoria certa (searchIndex nao existe no BR)
       const itens = await searchAmazonProducts(`${termo} jogo de tabuleiro`, 10);
       for (const item of itens) {
-        if (item.asin && item.price) porAsin.set(item.asin, item);
+        // So entra oferta COMPLETA: precisa de ASIN, preco e link real da Amazon.
+        // Sem isso nao serve pra divulgar, entao e descartada.
+        if (item.asin && item.price && item.affiliate_url) porAsin.set(item.asin, item);
       }
     } catch (e) {
       console.error(`Erro buscando "${termo}":`, e.message);
@@ -618,145 +623,22 @@ async function buscarOfertasAmazon(config) {
 
   return [...porAsin.values()]
     .filter(p => p.discount >= minDiscount)
+    .filter(p => !jaEnviados[p.asin])   // nao repete o que ja foi enviado
     .sort((a, b) => b.discount - a.discount)
     .slice(0, limit);
 }
 
-async function composeOffersMessage(config) {
-  const ofertas = await buscarOfertasAmazon(config);
-
-  let message = `🎲 *OFERTAS DE JOGOS - TABULEIRO360*\n\n`;
-  message += `_${new Date().toLocaleString('pt-BR')}_\n\n`;
-
-  ofertas.forEach((p, i) => {
-    message += `*${i + 1}. ${p.title}*\n`;
-    if (p.oldPrice && p.discount > 0) {
-      message += `💰 ${p.price} ~${p.oldPrice}~ 🔥 ${p.discount}% OFF\n`;
-    } else {
-      message += `💰 ${p.price}\n`;
-    }
-    message += `🔗 ${trackUrl(p.affiliate_url, p.title)}\n\n`;
-  });
-
-  message += '_Aproveite! 💸_';
-  return { message, count: ofertas.length, ofertas };
+// Legenda de cada oferta (vai junto com a foto, uma mensagem por jogo)
+function legendaOferta(p) {
+  const NL = String.fromCharCode(10);
+  let t = `*${p.title}*` + NL;
+  t += (p.oldPrice && p.discount > 0)
+    ? `\u{1F4B0} ${p.price} ~${p.oldPrice}~ \u{1F525} ${p.discount}% OFF`
+    : `\u{1F4B0} ${p.price}`;
+  t += NL + `\u{1F517} ${trackUrl(p.affiliate_url, p.title)}`;
+  return t;
 }
 
-// 📤 O servidor Windows (script Node) busca aqui a mensagem pronta pra enviar no grupo.
-// Protegido por chave (WA_PULL_KEY). Só conexão de SAÍDA — não expõe nada.
-app.get('/api/pending-message', async (req, res) => {
-  try {
-    const key = process.env.WA_PULL_KEY;
-    if (key && req.query.key !== key) {
-      return res.status(401).json({ error: 'chave inválida' });
-    }
-    const config = await loadConfig();
-    const { message, count } = await composeOffersMessage(config);
-    res.json({
-      target: config.whatsappNumber || '',
-      message,
-      count,
-      frequencyMinutes: config.frequency || 60,
-      autoSend: config.sendAlerts !== false
-    });
-  } catch (error) {
-    res.json({ error: error.message });
-  }
-});
-
-// ðŸ“± ENVIAR WHATSAPP - Enviar melhores preÃ§os
-app.post('/api/send-best-prices', async (req, res) => {
-  try {
-    const { whatsapp } = req.body;
-    const config = await loadConfig();
-
-    if (!whatsapp) {
-      return res.json({ success: false, error: 'Configure um número ou grupo WhatsApp primeiro' });
-    }
-
-    // Usa a mesma lógica do envio automático: promoções reais filtradas por desconto/quantidade
-    const { message, count } = await composeOffersMessage(config);
-    if (count === 0) {
-      return res.json({ success: false, error: 'Nenhuma oferta com o desconto mínimo configurado. Baixe o "Desconto mínimo" nas Configurações.' });
-    }
-
-    // Se a Evolution API estiver configurada, ENVIA sozinho (100% automático).
-    // Senão, devolve o link wa.me (envio 1-clique) como fallback.
-    if (isEvolutionConfigured()) {
-      const sent = await sendViaEvolution(whatsapp, message);
-      if (sent.success) {
-        console.log(`Enviado automaticamente via Evolution para ${whatsapp} (${count} ofertas)`);
-        return res.json({
-          success: true,
-          sent: true,
-          message: `✅ Enviado automaticamente para ${whatsapp}!`,
-          count,
-          products: []
-        });
-      }
-      console.log('Evolution falhou, usando fallback:', sent.error);
-    }
-
-    // Fallback (Evolution não ligado ainda)
-    const isGroup = whatsapp.includes('chat.whatsapp.com');
-    let whatsappLink;
-    if (isGroup) {
-      // wa.me não pré-preenche mensagem em grupo. Abre o grupo e devolve o texto pra copiar.
-      whatsappLink = whatsapp;
-    } else {
-      const cleanNumber = whatsapp.replace(/[^\d]/g, '');
-      whatsappLink = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`;
-    }
-
-    console.log(`Mensagem de ofertas gerada para ${whatsapp} (${count} ofertas)`);
-
-    res.json({
-      success: true,
-      sent: false,
-      isGroup,
-      messageText: message,
-      message: isGroup ? 'Abra o grupo e cole a mensagem (copie abaixo)' : 'Clique no link abaixo para enviar no WhatsApp',
-      whatsappLink: whatsappLink,
-      count,
-      products: []
-    });
-  } catch (error) {
-    res.json({ success: false, error: error.message });
-  }
-});
-
-// ðŸ“± ENVIAR PRODUTO INDIVIDUAL
-app.post('/api/send-product-whatsapp', async (req, res) => {
-  try {
-    const { asin, whatsapp } = req.body;
-    const config = await loadConfig();
-
-    const product = config.products.find(p => p.asin === asin);
-    if (!product) {
-      return res.json({ success: false, error: 'Produto nÃ£o encontrado' });
-    }
-
-    const affiliate_url = buildSearchUrl(product.title);
-
-    let message = '🎲 *OFERTA ESPECIAL - TABULEIRO360*\n\n';
-    message += `*${product.title}*\n\n`;
-    message += `💰 *${product.price}*\n\n`;
-    message += `🔗 COMPRAR: ${affiliate_url}\n\n`;
-    message += '_Aproveite! 🎯_';
-
-    const whatsappLink = `https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}`;
-
-    console.log(`ðŸ“± Produto ${asin} - Mensagem gerada para ${whatsapp}`);
-
-    res.json({
-      success: true,
-      message: 'Clique abaixo para enviar no WhatsApp',
-      whatsappLink: whatsappLink
-    });
-  } catch (error) {
-    res.json({ success: false, error: error.message });
-  }
-});
 
 // Iniciar servidor
 app.listen(PORT, async () => {
