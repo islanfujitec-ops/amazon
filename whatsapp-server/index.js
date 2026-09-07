@@ -18,7 +18,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 function acharNavegador() {
   if (process.env.CHROME_PATH && fs.existsSync(process.env.CHROME_PATH)) return process.env.CHROME_PATH;
 
-  // 1) Chromium do Playwright (%LOCALAPPDATA%\ms-playwright\chromium-XXXX\chrome-win\chrome.exe)
+  // 1) Chrome/Edge instalados primeiro: mais confiaveis com o whatsapp-web.js
+  //    (o Chromium do Playwright as vezes trava sem dar erro)
+  const fixos = [
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
+  ];
+  for (const p of fixos) { try { if (fs.existsSync(p)) return p; } catch { /* ignora */ } }
+  // 2) Chromium do Playwright (%LOCALAPPDATA%\ms-playwright\chromium-XXXX\chrome-win\chrome.exe)
   try {
     const plDir = path.join(process.env.LOCALAPPDATA || "", "ms-playwright");
     if (fs.existsSync(plDir)) {
@@ -44,14 +53,6 @@ function acharNavegador() {
     }
   } catch { /* ignora */ }
 
-  // 3) Google Chrome / Edge instalados
-  const fixos = [
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
-  ];
-  for (const p of fixos) { try { if (fs.existsSync(p)) return p; } catch { /* ignora */ } }
   return undefined;
 }
 
@@ -155,6 +156,12 @@ const client = new Client({
     headless: true,
     executablePath: navegador, // usa um navegador já instalado (não baixa)
     args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  },
+  // Corrige "Execution context was destroyed": fixa uma versao conhecida do WhatsApp Web,
+  // senao a lib tenta injetar numa versao nova que ela ainda nao suporta.
+  webVersionCache: {
+    type: "remote",
+    remotePath: "https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1027913442.html"
   }
 });
 
@@ -164,10 +171,24 @@ client.on("qr", (qr) => {
   qrcode.generate(qr, { small: true });
 });
 
+client.on("loading_screen", (pct, msg) => console.log(`[WhatsApp] Carregando ${pct}% ${msg || ""}`));
+client.on("change_state", (st) => console.log("[WhatsApp] Estado:", st));
 client.on("authenticated", () => console.log("[WhatsApp] Autenticado."));
+
+// Se em 90s nao apareceu QR nem conectou, avisa o que fazer (evita ficar no escuro)
+const watchdog = setTimeout(() => {
+  if (!ready) {
+    console.log("[WhatsApp] AINDA SEM RESPOSTA apos 90s. O que tentar:");
+    console.log("  1) Apague a pasta data\.wwebjs_auth e rode de novo (sessao corrompida)");
+    console.log("  2) Instale o Google Chrome no servidor");
+    console.log("  3) Confira se o servidor acessa web.whatsapp.com");
+  }
+}, 90000);
+
 client.on("auth_failure", (m) => console.error("[WhatsApp] Falha de autenticação:", m));
 
 client.on("ready", () => {
+  clearTimeout(watchdog);
   ready = true;
   console.log("\n✅ WHATSAPP CONECTADO! O envio automático está ativo.");
   console.log("   Deixe esta janela ABERTA. Ela envia as ofertas sozinha no intervalo configurado.\n");
