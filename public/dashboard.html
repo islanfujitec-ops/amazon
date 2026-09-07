@@ -376,11 +376,11 @@
                         el.innerHTML = '<p style="color:#666;">Nada enviado ainda. Quando o servidor enviar, aparece aqui com data e hora.</p>';
                         return;
                     }
-                    let html = '<p style="color:#666; margin-bottom:10px;">' + d.total + ' jogos ja enviados (nao serao repetidos)</p>';
+                    let html = '<p style="color:#666; margin-bottom:10px;">' + d.total + ' jogos ja enviados. So voltam a ser enviados se o desconto ficar MAIOR.</p>';
                     d.log.forEach(function(it) {
                         const dt = new Date(it.at).toLocaleString('pt-BR');
                         html += '<div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">' +
-                            '<span style="flex:1;">' + it.title + '</span>' +
+                            '<span style="flex:1;">' + it.title + (it.discount ? ' <b style="color:#e53e3e;">' + it.discount + '% OFF</b>' : '') + '</span>' +
                             '<span style="color:#999; font-size:0.9em; white-space:nowrap;">' + dt + '</span>' +
                             '</div>';
                     });

@@ -622,8 +622,15 @@ async function buscarOfertasAmazon(config, opcoes = {}) {
   }
 
   return [...porAsin.values()]
-    .filter(p => p.discount >= minDiscount)
-    .filter(p => !jaEnviados[p.asin])   // nao repete o que ja foi enviado
+    // 1) So entra o que esta REALMENTE em promocao (desconto > 0) e acima do minimo
+    .filter(p => p.discount > 0 && p.discount >= minDiscount)
+    // 2) Nao repete o ja enviado — a menos que o desconto tenha AUMENTADO desde entao
+    .filter(p => {
+      const anterior = jaEnviados[p.asin];
+      if (anterior === undefined) return true;                    // nunca enviado
+      const descAnterior = typeof anterior === 'object' ? (anterior.discount || 0) : 0;
+      return p.discount > descAnterior;                           // so se baixou mais
+    })
     .sort((a, b) => b.discount - a.discount)
     .slice(0, limit);
 }
@@ -657,6 +664,7 @@ app.get('/api/pending-message', async (req, res) => {
       offers: ofertas.map(p => ({
         asin: p.asin,
         title: p.title,
+        discount: p.discount,
         image: p.image || null,
         caption: legendaOferta(p)
       }))
@@ -669,7 +677,7 @@ app.get('/api/pending-message', async (req, res) => {
 // ✅ Registra o que JA foi enviado (com data/hora) pra nunca repetir
 app.post('/api/mark-sent', async (req, res) => {
   try {
-    const { asins, titles } = req.body;
+    const { asins, titles, discounts } = req.body;
     if (!Array.isArray(asins) || !asins.length) return res.json({ success: false, error: 'sem asins' });
 
     const config = await loadConfig();
@@ -678,8 +686,10 @@ app.post('/api/mark-sent', async (req, res) => {
     const agora = Date.now();
 
     asins.forEach((asin, idx) => {
-      config.sentAsins[asin] = agora;
-      config.sentLog.unshift({ asin, title: (titles && titles[idx]) || asin, at: agora });
+      const desconto = (discounts && discounts[idx]) || 0;
+      // Guarda o desconto do envio: so reenvia se aparecer um desconto MAIOR
+      config.sentAsins[asin] = { at: agora, discount: desconto };
+      config.sentLog.unshift({ asin, title: (titles && titles[idx]) || asin, at: agora, discount: desconto });
     });
     config.sentLog = config.sentLog.slice(0, 100);
 
