@@ -10,7 +10,7 @@ Login: `admintabuleiro@360` / `admintabuleiro@360`
 | Recurso | Como funciona |
 |---|---|
 | **Site online** | Vercel, com login e dados salvos no Supabase (não perde nada) |
-| **Ofertas por marca** | Suas 27 marcas → link de busca na Amazon com a sua tag |
+| **Ofertas por marca** | Suas 27 marcas → produto real da Amazon com preço, desconto e link direto |
 | **Radar de promoções** | Puxa ao vivo do Compara Jogos os jogos que baixaram de preço |
 | **Links de afiliado** | Todo link sai com a sua tag `tabuleiro3605-20` → **comissão é sua** |
 | **Métricas de cliques** | Aba Métricas mostra em qual jogo o público mais clicou |
@@ -77,7 +77,8 @@ Pasta: `Desktop\360` — arquivos: `index.js`, `package.json`, `INICIAR.bat`
 
 ---
 
-## 📌 PRÓXIMO PASSO
+## 📌 ESTADO ATUAL
 
-**Destravar a Creators API da Amazon.** É o único item que falta para o sistema mostrar
-preço real e link direto do produto. Todo o resto já está pronto e rodando.
+Sistema **completo**. O que resta é operacional:
+1. Ligar o Windows Server e rodar o `INICIAR.bat` (o painel mostra 🟢 quando conectar)
+2. Ajustar **desconto mínimo** e **quantidade** ao seu gosto nas Configurações
