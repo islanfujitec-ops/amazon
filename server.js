@@ -597,7 +597,11 @@ app.get('/api/best-prices', async (req, res) => {
 async function buscarOfertasAmazon(config) {
   const minDiscount = config.minDiscount || 0;
   const limit = config.perBrand || 5;
-  const termos = [...(config.keywords || []), ...(config.brands || [])].slice(0, 6);
+  // Marcas primeiro (sao especificas de jogos; keywords genericas trazem ruido tipo
+  // "kit banheiro"). Rotaciona pela hora do dia pra cobrir todas as marcas ao longo do dia.
+  const marcas = config.brands || [];
+  const giro = marcas.length ? (new Date().getHours() * 6) % marcas.length : 0;
+  const termos = [...marcas.slice(giro), ...marcas.slice(0, giro)].slice(0, 6);
 
   const porAsin = new Map();
   for (const termo of termos) {
