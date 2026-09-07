@@ -656,7 +656,10 @@ async function buscarOfertasAmazon(config, opcoes = {}) {
       const anterior = jaEnviados[p.asin];
       if (anterior === undefined) return true;                    // nunca enviado
       const descAnterior = typeof anterior === 'object' ? (anterior.discount || 0) : 0;
-      return p.discount > descAnterior;                           // so se baixou mais
+      // Se ja foi enviado mas nao temos o desconto daquele envio, NAO repete.
+      // (padrao seguro: sem essa guarda, um registro com 0% faria repetir pra sempre)
+      if (!descAnterior) return false;
+      return p.discount > descAnterior;                           // so volta se baixou mais
     })
     .sort((a, b) => b.discount - a.discount)
     .slice(0, limit);
