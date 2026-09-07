@@ -223,7 +223,7 @@
                 <p style="color: #666; margin-bottom: 15px;">Gera um link de afiliado para as <strong>melhores ofertas de cada marca</strong> que você cadastrou (ordenadas pelo menor preço) e envia pronto pro seu WhatsApp. O cliente clica, compra, você ganha a comissão.</p>
 
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
-                    <button class="btn btn-primary" onclick="monitorPrices()">🔍 Gerar Ofertas das Marcas</button>
+                    <button class="btn btn-primary" onclick="monitorPrices()">🔍 Buscar Ofertas Reais (Amazon)</button>
                     <button class="btn btn-primary" onclick="loadComparaJogos()">🔥 Promoções do Compara Jogos</button>
                     <button class="btn btn-success" onclick="sendBestPrices()">📤 Enviar no WhatsApp</button>
                 </div>
@@ -343,24 +343,30 @@
             const el = document.getElementById('monitorResult');
             el.classList.remove('loading');
             el.style.display = 'block';
-            el.innerHTML = '<p style="text-align: center; padding: 40px;">⏳ Buscando preços...</p>';
+            el.innerHTML = '<p style="text-align:center; padding:40px;">Buscando ofertas reais na Amazon...</p>';
+            document.getElementById('bestPricesResult').innerHTML = '';
 
-            fetch('/api/monitor')
+            fetch('/api/monitor?limit=15')
                 .then(r => r.json())
                 .then(data => {
-                    if (data.results && data.results.length > 0) {
-                        let html = `<div class="status-box success"><h3>✅ ${data.results.length} marcas/categorias com ofertas prontas!</h3></div>`;
-                        data.results.forEach((p, i) => {
-                            const link = p.affiliate_url || `https://www.amazon.com.br/s?k=${encodeURIComponent(p.title)}&i=toys&s=price-asc-rank&tag=tainadadecio-20`;
-                            html += `<div class="product-card">
-                                <h4>${i+1}. ${p.title} <span style="font-size:0.75em; color:#999;">(${p.type || 'marca'})</span></h4>
-                                <a href="${link}" target="_blank" class="product-btn">🔗 Ver melhores ofertas na Amazon</a>
-                            </div>`;
-                        });
-                        document.getElementById('monitorResult').innerHTML = html;
-                    } else {
-                        document.getElementById('monitorResult').innerHTML = '<div class="status-box"><p>❌ Nenhuma marca configurada. Adicione marcas na aba Marcas & Keywords.</p></div>';
+                    if (!data.results || !data.results.length) {
+                        el.innerHTML = '<div class="status-box"><p>Nenhuma oferta acima de ' + (data.minDiscount || 0) + '% de desconto agora. Baixe o "Desconto minimo" nas Configuracoes.</p></div>';
+                        return;
                     }
+                    let html = '<div class="status-box success"><h3>' + data.results.length + ' ofertas REAIS da Amazon (acima de ' + (data.minDiscount || 0) + '% OFF)</h3></div>';
+                    data.results.forEach(function(p, i) {
+                        const desc = p.discount > 0 ? '<span style="color:#e53e3e; font-weight:bold;">' + p.discount + '% OFF</span>' : '';
+                        const de = p.oldPrice ? '<span style="text-decoration:line-through; color:#999; font-size:0.85em;"> ' + p.oldPrice + '</span>' : '';
+                        const img = p.image ? '<img src="' + p.image + '" alt="" style="width:70px; height:70px; object-fit:contain; border-radius:8px;" onerror="this.style.display=' + String.fromCharCode(39) + 'none' + String.fromCharCode(39) + '">' : '';
+                        html += '<div class="product-card" style="display:flex; gap:15px; align-items:center;">' + img +
+                            '<div style="flex:1;">' +
+                            '<h4>' + (i+1) + '. ' + p.title + '</h4>' +
+                            '<div class="product-price">' + p.price + de + ' ' + desc + '</div>' +
+                            (p.rating ? '<div style="font-size:0.8em; color:#666;">nota ' + p.rating + '</div>' : '') +
+                            '<a href="' + p.affiliate_url + '" target="_blank" class="product-btn">Comprar na Amazon (seu link)</a>' +
+                            '</div></div>';
+                    });
+                    el.innerHTML = html;
                 });
         }
 

@@ -349,8 +349,22 @@ app.post('/api/config', async (req, res) => {
 
 app.get('/api/monitor', async (req, res) => {
   try {
-    const items = await monitorPrices();
-    res.json({ success: true, results: items || [] });
+    const config = await loadConfig();
+    // Ofertas REAIS da Amazon (Creators API), filtradas pelo desconto minimo configurado
+    const ofertas = await buscarOfertasAmazon({ ...config, perBrand: parseInt(req.query.limit) || config.perBrand || 10 });
+    res.json({
+      success: true,
+      minDiscount: config.minDiscount || 0,
+      results: ofertas.map(p => ({
+        title: p.title,
+        price: p.price,
+        oldPrice: p.oldPrice,
+        discount: p.discount,
+        image: p.image,
+        rating: p.rating,
+        affiliate_url: trackUrl(p.affiliate_url, p.title)
+      }))
+    });
   } catch (error) {
     console.error('Erro no monitor:', error.message);
     res.json({ success: false, error: error.message, results: [] });
@@ -575,41 +589,52 @@ app.get('/api/best-prices', async (req, res) => {
   }
 });
 
-// Monta a mensagem do WhatsApp.
-// IMPORTANTE (honestidade): o Compara Jogos é usado só como RADAR — ele indica quais
-// jogos estão em promoção no mercado (lojas especializadas). Esses preços NÃO são da
-// Amazon, então NÃO são exibidos na mensagem: mostrar preço de uma loja com link de
-// outra seria enganoso. A mensagem leva o nome do jogo + link da Amazon com a sua tag
-// (comissão garantida). Quando a Creators API for liberada, passamos a exibir o preço
-// REAL da Amazon e o link direto do produto — o código já está preparado.
-async function composeOffersMessage(config) {
+// Monta a mensagem do WhatsApp com OFERTAS REAIS da Amazon (Creators API).
+// Busca nas marcas/keywords que o usuario cadastrou, filtra pelo desconto minimo
+// configurado (desconto REAL da Amazon) e monta o link direto do produto com a tag.
+// ponytail: limita a 6 termos por rodada pra nao estourar rate limit; se precisar de
+// mais cobertura, rotacionar os termos entre execucoes.
+async function buscarOfertasAmazon(config) {
   const minDiscount = config.minDiscount || 0;
   const limit = config.perBrand || 5;
-  const tagFinal = config.partnerTag || process.env.AMAZON_PARTNER_TAG || 'tabuleiro3605-20';
+  const termos = [...(config.keywords || []), ...(config.brands || [])].slice(0, 6);
 
-  let deals = [];
-  try {
-    deals = await fetchPriceReductions();
-  } catch (e) {
-    console.error('Erro Compara Jogos:', e.message);
+  const porAsin = new Map();
+  for (const termo of termos) {
+    try {
+      const itens = await searchAmazonProducts(termo, 10);
+      for (const item of itens) {
+        if (item.asin && item.price) porAsin.set(item.asin, item);
+      }
+    } catch (e) {
+      console.error(`Erro buscando "${termo}":`, e.message);
+    }
   }
 
-  // Radar: jogos com queda de preço no mercado, filtrados pelo desconto mínimo
-  const selected = deals.filter(d => d.discount >= minDiscount).slice(0, limit);
+  return [...porAsin.values()]
+    .filter(p => p.discount >= minDiscount)
+    .sort((a, b) => b.discount - a.discount)
+    .slice(0, limit);
+}
 
-  let message = '🎲 *JOGOS EM DESTAQUE - TABULEIRO360*\n\n';
+async function composeOffersMessage(config) {
+  const ofertas = await buscarOfertasAmazon(config);
+
+  let message = `🎲 *OFERTAS DE JOGOS - TABULEIRO360*\n\n`;
   message += `_${new Date().toLocaleString('pt-BR')}_\n\n`;
-  message += 'Jogos com queda de preço no mercado. Confira na Amazon:\n\n';
 
-  selected.forEach((d, i) => {
-    // Busca escopada em Brinquedos e Jogos (i=toys) pra o jogo aparecer certeiro em 1º
-    const amazonUrl = `https://www.amazon.com.br/s?k=${encodeURIComponent(d.name)}&i=toys&tag=${tagFinal}`;
-    message += `*${i + 1}. ${d.name}*\n`;
-    message += `🔗 ${trackUrl(amazonUrl, d.name)}\n\n`;
+  ofertas.forEach((p, i) => {
+    message += `*${i + 1}. ${p.title}*\n`;
+    if (p.oldPrice && p.discount > 0) {
+      message += `💰 ${p.price} ~${p.oldPrice}~ 🔥 ${p.discount}% OFF\n`;
+    } else {
+      message += `💰 ${p.price}\n`;
+    }
+    message += `🔗 ${trackUrl(p.affiliate_url, p.title)}\n\n`;
   });
 
-  message += '_Preços e disponibilidade na Amazon 💸_';
-  return { message, count: selected.length };
+  message += '_Aproveite! 💸_';
+  return { message, count: ofertas.length, ofertas };
 }
 
 // 📤 O servidor Windows (script Node) busca aqui a mensagem pronta pra enviar no grupo.
