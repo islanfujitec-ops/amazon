@@ -362,13 +362,35 @@ app.get('/api/monitor', async (req, res) => {
         discount: p.discount,
         image: p.image,
         rating: p.rating,
-        affiliate_url: trackUrl(p.affiliate_url, p.title)
+        affiliate_url: `${BASE_URL}/l/${p.asin}`
       }))
     });
   } catch (error) {
     console.error('Erro no monitor:', error.message);
     res.json({ success: false, error: error.message, results: [] });
   }
+});
+
+// 🔗 LINK CURTO: /l/<ASIN> -> conta o clique e abre o produto na Amazon com a tag.
+// Usa o proprio codigo do produto como atalho, entao nao precisa guardar nada.
+app.get('/l/:asin', async (req, res) => {
+  const asin = String(req.params.asin || '').toUpperCase();
+  if (!/^[A-Z0-9]{10}$/.test(asin)) return res.status(400).send('Link inválido');
+
+  const tag = process.env.AMAZON_PARTNER_TAG || 'tabuleiro3605-20';
+  const destino = `https://www.amazon.com.br/dp/${asin}?tag=${tag}&linkCode=osi`;
+
+  try {
+    const config = await loadConfig();
+    config.clicks = config.clicks || {};
+    config.clicks[asin] = (config.clicks[asin] || 0) + 1;
+    config.totalClicks = (config.totalClicks || 0) + 1;
+    await saveConfig(config);
+  } catch (e) {
+    console.error('Erro ao registrar clique:', e.message);
+  }
+
+  res.redirect(302, destino);
 });
 
 // 📊 RASTREIO DE CLIQUES: conta o clique e redireciona pra Amazon.
@@ -463,8 +485,13 @@ app.get('/api/metrics', async (req, res) => {
   try {
     const config = await loadConfig();
     const clicks = config.clicks || {};
+    // Os cliques sao gravados por ASIN (link curto). Traduz pro nome do jogo
+    // usando o historico de envios, pra ficar legivel no painel.
+    const nomePorAsin = {};
+    (config.sentLog || []).forEach(it => { if (it.asin && it.title) nomePorAsin[it.asin] = it.title; });
+
     const ranking = Object.entries(clicks)
-      .map(([label, count]) => ({ label, count }))
+      .map(([label, count]) => ({ label: nomePorAsin[label] || label, count }))
       .sort((a, b) => b.count - a.count);
     res.json({ totalClicks: config.totalClicks || 0, ranking });
   } catch (error) {
@@ -642,7 +669,7 @@ function legendaOferta(p) {
   t += (p.oldPrice && p.discount > 0)
     ? `\u{1F4B0} ${p.price} ~${p.oldPrice}~ \u{1F525} ${p.discount}% OFF`
     : `\u{1F4B0} ${p.price}`;
-  t += NL + `\u{1F517} ${trackUrl(p.affiliate_url, p.title)}`;
+  t += NL + `\u{1F517} ${BASE_URL}/l/${p.asin}`;   // link curto
   return t;
 }
 
