@@ -640,6 +640,79 @@ function legendaOferta(p) {
 }
 
 
+// 📤 O servidor Windows busca aqui as ofertas prontas (uma mensagem por jogo, com foto)
+app.get('/api/pending-message', async (req, res) => {
+  try {
+    const key = process.env.WA_PULL_KEY;
+    if (key && req.query.key !== key) return res.status(401).json({ error: 'chave inválida' });
+
+    const config = await loadConfig();
+    const ofertas = await buscarOfertasAmazon(config);
+
+    res.json({
+      target: config.whatsappNumber || '',
+      frequencyMinutes: config.frequency || 60,
+      autoSend: config.sendAlerts !== false,
+      count: ofertas.length,
+      offers: ofertas.map(p => ({
+        asin: p.asin,
+        title: p.title,
+        image: p.image || null,
+        caption: legendaOferta(p)
+      }))
+    });
+  } catch (error) {
+    res.json({ error: error.message, offers: [] });
+  }
+});
+
+// ✅ Registra o que JA foi enviado (com data/hora) pra nunca repetir
+app.post('/api/mark-sent', async (req, res) => {
+  try {
+    const { asins, titles } = req.body;
+    if (!Array.isArray(asins) || !asins.length) return res.json({ success: false, error: 'sem asins' });
+
+    const config = await loadConfig();
+    config.sentAsins = config.sentAsins || {};
+    config.sentLog = config.sentLog || [];
+    const agora = Date.now();
+
+    asins.forEach((asin, idx) => {
+      config.sentAsins[asin] = agora;
+      config.sentLog.unshift({ asin, title: (titles && titles[idx]) || asin, at: agora });
+    });
+    config.sentLog = config.sentLog.slice(0, 100);
+
+    await saveConfig(config);
+    res.json({ success: true, total: Object.keys(config.sentAsins).length });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// 🕒 Histórico de envios (data e hora)
+app.get('/api/sent-history', async (req, res) => {
+  try {
+    const config = await loadConfig();
+    res.json({ total: Object.keys(config.sentAsins || {}).length, log: (config.sentLog || []).slice(0, 30) });
+  } catch (error) {
+    res.json({ total: 0, log: [], error: error.message });
+  }
+});
+
+// 🔄 Libera todos pra poderem ser enviados de novo
+app.post('/api/clear-sent', async (req, res) => {
+  try {
+    const config = await loadConfig();
+    config.sentAsins = {};
+    config.sentLog = [];
+    await saveConfig(config);
+    res.json({ success: true });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
 // Iniciar servidor
 app.listen(PORT, async () => {
   console.log(`\nðŸš€ Price Monitor rodando em http://localhost:${PORT}`);
