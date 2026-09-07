@@ -692,6 +692,8 @@ app.get('/api/pending-message', async (req, res) => {
         asin: p.asin,
         title: p.title,
         discount: p.discount,
+        price: p.price,
+        oldPrice: p.oldPrice || null,
         image: p.image || null,
         caption: legendaOferta(p)
       }))
@@ -704,7 +706,7 @@ app.get('/api/pending-message', async (req, res) => {
 // ✅ Registra o que JA foi enviado (com data/hora) pra nunca repetir
 app.post('/api/mark-sent', async (req, res) => {
   try {
-    const { asins, titles, discounts } = req.body;
+    const { asins, titles, discounts, items } = req.body;
     if (!Array.isArray(asins) || !asins.length) return res.json({ success: false, error: 'sem asins' });
 
     const config = await loadConfig();
@@ -712,18 +714,47 @@ app.post('/api/mark-sent', async (req, res) => {
     config.sentLog = config.sentLog || [];
     const agora = Date.now();
 
+    // Vitrine do dia: zera sozinha quando vira o dia (nao acumula lixo)
+    const hoje = new Date().toISOString().slice(0, 10);
+    if (!config.today || config.today.date !== hoje) config.today = { date: hoje, offers: [] };
+
     asins.forEach((asin, idx) => {
       const desconto = (discounts && discounts[idx]) || 0;
       // Guarda o desconto do envio: so reenvia se aparecer um desconto MAIOR
       config.sentAsins[asin] = { at: agora, discount: desconto };
       config.sentLog.unshift({ asin, title: (titles && titles[idx]) || asin, at: agora, discount: desconto });
+
+      const extra = (items && items[idx]) || {};
+      config.today.offers.unshift({
+        asin,
+        title: (titles && titles[idx]) || asin,
+        discount: desconto,
+        price: extra.price || null,
+        oldPrice: extra.oldPrice || null,
+        image: extra.image || null,
+        at: agora
+      });
     });
+    config.today.offers = config.today.offers.slice(0, 60);
     config.sentLog = config.sentLog.slice(0, 100);
 
     await saveConfig(config);
     res.json({ success: true, total: Object.keys(config.sentAsins).length });
   } catch (error) {
     res.json({ success: false, error: error.message });
+  }
+});
+
+// 🌐 PAGINA PUBLICA: promocoes de hoje (zera sozinha quando vira o dia)
+app.get('/api/today', async (req, res) => {
+  try {
+    const config = await loadConfig();
+    const hoje = new Date().toISOString().slice(0, 10);
+    const t = config.today;
+    if (!t || t.date !== hoje) return res.json({ date: hoje, offers: [] });
+    res.json({ date: t.date, offers: t.offers || [] });
+  } catch (error) {
+    res.json({ date: null, offers: [], error: error.message });
   }
 });
 

@@ -112,9 +112,9 @@ async function resolverChatId(client, alvo) {
 }
 
 // Avisa o site o que ja foi enviado (pra nunca repetir)
-async function marcarEnviados(asins, titles, discounts) {
+async function marcarEnviados(asins, titles, discounts, items) {
   try {
-    await axios.post(`${APP_URL}/api/mark-sent`, { asins, titles, discounts }, { timeout: 15000 });
+    await axios.post(`${APP_URL}/api/mark-sent`, { asins, titles, discounts, items }, { timeout: 15000 });
   } catch { /* ignora */ }
 }
 
@@ -131,7 +131,7 @@ async function sendOffer(client) {
     }
 
     const chatId = await resolverChatId(client, offer.target);
-    const enviados = [], titulos = [], descontos = [];
+    const enviados = [], titulos = [], descontos = [], detalhes = [];
 
     // Uma mensagem por jogo: foto + legenda. Pausa entre elas pra nao parecer spam.
     for (const item of offer.offers) {
@@ -145,6 +145,7 @@ async function sendOffer(client) {
         enviados.push(item.asin);
         titulos.push(item.title);
         descontos.push(item.discount || 0);
+        detalhes.push({ price: item.price, oldPrice: item.oldPrice, image: item.image });
         console.log(`  enviado: ${item.title.slice(0, 55)}`);
         await new Promise(r => setTimeout(r, 4000));
       } catch (e) {
@@ -153,7 +154,7 @@ async function sendOffer(client) {
     }
 
     if (enviados.length) {
-      await marcarEnviados(enviados, titulos, descontos);
+      await marcarEnviados(enviados, titulos, descontos, detalhes);
       lastSent = Date.now();
       console.log(`[${new Date().toLocaleString("pt-BR")}] ${enviados.length} ofertas enviadas para ${offer.target}`);
     }

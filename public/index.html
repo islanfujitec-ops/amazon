@@ -1,14 +1,82 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TABULEIRO360 - Redirecionando...</title>
-    <script>
-        window.location.href = '/dashboard.html';
-    </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TABULEIRO360 — Promoções de Hoje</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI',Tahoma,sans-serif; background:linear-gradient(135deg,#667eea,#764ba2); min-height:100vh; padding:16px; }
+  .topo { max-width:900px; margin:0 auto 14px; display:flex; justify-content:flex-end; }
+  .admin { color:rgba(255,255,255,.75); text-decoration:none; font-size:.85em; border:1px solid rgba(255,255,255,.35); padding:5px 12px; border-radius:6px; }
+  .admin:hover { color:#fff; border-color:#fff; }
+  .caixa { max-width:900px; margin:0 auto; background:#fff; border-radius:15px; box-shadow:0 20px 60px rgba(0,0,0,.3); overflow:hidden; }
+  .cabecalho { background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; padding:28px 20px; text-align:center; }
+  .cabecalho img { max-width:120px; border-radius:12px; margin-bottom:12px; }
+  .cabecalho h1 { font-size:1.7em; }
+  .cabecalho p { opacity:.9; margin-top:6px; }
+  .lista { padding:20px; }
+  .card { display:flex; gap:14px; align-items:center; border:1px solid #eee; border-radius:10px; padding:14px; margin-bottom:12px; }
+  .card img { width:80px; height:80px; object-fit:contain; border-radius:8px; flex-shrink:0; }
+  .info { flex:1; min-width:0; }
+  .nome { font-weight:600; color:#222; margin-bottom:6px; line-height:1.35; }
+  .preco { font-size:1.25em; font-weight:bold; color:#22a35b; }
+  .antes { text-decoration:line-through; color:#999; font-size:.8em; font-weight:normal; margin-left:6px; }
+  .off { background:#e53e3e; color:#fff; padding:2px 8px; border-radius:5px; font-size:.8em; font-weight:bold; margin-left:6px; }
+  .btn { display:inline-block; margin-top:10px; background:#667eea; color:#fff; text-decoration:none; padding:9px 16px; border-radius:7px; font-weight:600; font-size:.92em; }
+  .btn:hover { background:#5568d3; }
+  .vazio { text-align:center; padding:50px 20px; color:#777; }
+  .rodape { text-align:center; color:rgba(255,255,255,.7); font-size:.8em; padding:18px; }
+  @media (max-width:520px){ .card{flex-direction:column; align-items:flex-start;} .card img{width:100%; height:150px;} }
+</style>
 </head>
 <body>
-    <p>Redirecionando para o dashboard...</p>
+  <div class="topo"><a class="admin" href="/login.html">admin</a></div>
+
+  <div class="caixa">
+    <div class="cabecalho">
+      <img src="logo.jpg" alt="TABULEIRO360" onerror="this.style.display='none'">
+      <h1>🎲 Promoções de Hoje</h1>
+      <p id="data">carregando...</p>
+    </div>
+    <div class="lista" id="lista"><p class="vazio">Carregando promoções...</p></div>
+  </div>
+
+  <p class="rodape">Preços e disponibilidade conforme a Amazon no momento da compra.</p>
+
+<script>
+fetch('/api/today')
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    var dataEl = document.getElementById('data');
+    var lista = document.getElementById('lista');
+
+    if (d.date) {
+      var p = d.date.split('-');
+      dataEl.textContent = p[2] + '/' + p[1] + '/' + p[0];
+    } else { dataEl.textContent = ''; }
+
+    if (!d.offers || !d.offers.length) {
+      lista.innerHTML = '<p class="vazio">Nenhuma promoção publicada hoje ainda.<br>Volte mais tarde!</p>';
+      return;
+    }
+
+    var html = '';
+    d.offers.forEach(function(o){
+      var foto = o.image ? '<img src="' + o.image + '" alt="" onerror="this.style.display=\'none\'">' : '';
+      var antes = o.oldPrice ? '<span class="antes">' + o.oldPrice + '</span>' : '';
+      var off = o.discount ? '<span class="off">' + o.discount + '% OFF</span>' : '';
+      var preco = o.price ? '<div class="preco">' + o.price + antes + off + '</div>' : '';
+      html += '<div class="card">' + foto +
+              '<div class="info"><div class="nome">' + o.title + '</div>' + preco +
+              '<a class="btn" href="/l/' + o.asin + '" target="_blank" rel="nofollow sponsored">Ver na Amazon</a>' +
+              '</div></div>';
+    });
+    lista.innerHTML = html;
+  })
+  .catch(function(){
+    document.getElementById('lista').innerHTML = '<p class="vazio">Não consegui carregar agora. Tente recarregar.</p>';
+  });
+</script>
 </body>
 </html>
