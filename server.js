@@ -568,8 +568,8 @@ app.get('/api/whatsapp/status', async (req, res) => {
 
 app.get('/api/amazon/debug', async (req, res) => {
   try {
-    const res = req.query.res ? req.query.res.split(',') : null;
-    const result = await debugApi(req.query.q || 'Catan', res);
+    const recursos = req.query.res ? req.query.res.split(',') : null;
+    const result = await debugApi(req.query.q || 'Catan', recursos);
     res.json(result);
   } catch (error) {
     res.json({ error: error.message });
