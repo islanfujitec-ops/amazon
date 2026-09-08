@@ -14,7 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // URL base do app (pra montar links de rastreio de clique)
-const BASE_URL = process.env.BASE_URL || 'https://tabuleiro360.vercel.app';
+const BASE_URL = process.env.BASE_URL || 'https://www.tabuleiro360.shop';
 function trackUrl(target, label) {
   return `${BASE_URL}/r?to=${encodeURIComponent(target)}&label=${encodeURIComponent(label)}`;
 }
