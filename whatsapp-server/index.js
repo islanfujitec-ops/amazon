@@ -136,12 +136,49 @@ async function verificarNaPagina(client, asin) {
     });
 
     const info = await page.evaluate(() => {
-      const txt = document.body.innerText || "";
-      const freteGratis = /(entrega|frete)\s+gr[aá]tis/i.test(txt);
-      const m = txt.match(/economize\s+(?:mais\s+)?(\d{1,2})\s*%/i);
-      const cupom = m ? parseInt(m[1], 10) : 0;
-      const paginaOk = txt.length > 500 && !/Digite os caracteres|Sorry, we just need/i.test(txt);
-      return { freteGratis, cupom, paginaOk };
+      // IMPORTANTE: lemos so os blocos do PRODUTO PRINCIPAL.
+      // O texto da pagina inteira tem anuncios patrocinados com "Entrega GRATIS"
+      // de OUTROS produtos - usar body.innerText faria a gente afirmar algo falso.
+      const txt = (sel) => { const e = document.querySelector(sel); return e ? (e.innerText || "").trim() : ""; };
+      const primeiro = (...sels) => { for (const s of sels) { const v = txt(s); if (v) return v; } return ""; };
+
+      const entrega = primeiro("#deliveryBlockMessage", "#mir-layout-DELIVERY_BLOCK", "#delivery-block-ATF", "#promise-display");
+      const estoque = primeiro("#availability");
+      const preco   = primeiro("#corePriceDisplay_desktop_feature_div", "#apex_desktop", "#corePrice_feature_div");
+      const promo   = primeiro("#promoPriceBlockMessage", "#applicable_promotion_list_sec", "#promotions_feature_div", "#vpcButton");
+      const centro  = primeiro("#centerCol", "#dp-container");
+
+      // valido so se o bloco do produto carregou (nao e captcha / pagina vazia)
+      const paginaOk = (centro || preco).length > 100;
+      if (!paginaOk) return { paginaOk: false };
+
+      // Frete gratis + prazo. Ex.: "Entrega GRATIS 16 - 29 de Setembro. Ver detalhes"
+      let freteGratis = false, prazo = "";
+      const mEnt = entrega.match(/(?:entrega|frete)\s+gr[aá]tis[^\n]{0,60}/i);
+      if (mEnt) {
+        freteGratis = true;
+        prazo = mEnt[0].replace(/\.?\s*Ver detalhes.*/i, "").replace(/\s+/g, " ").trim();
+      }
+
+      // Estoque baixo (gera urgencia real). Ex.: "Somente 1 em estoque."
+      let estoqueBaixo = "";
+      const mEst = estoque.match(/somente\s+(\d+)\s+em estoque/i);
+      if (mEst) estoqueBaixo = `Somente ${mEst[1]} em estoque`;
+
+      // Parcelamento. Ex.: "Em ate 13x de R$ 42,82 sem juros"
+      let parcelas = "";
+      const mPar = (preco + " " + centro).match(/em at[ée]\s+(\d{1,2})x\s+de\s+(R\$\s?[\d.,]+)\s+sem juros/i);
+      if (mPar) parcelas = `Em até ${mPar[1]}x de ${mPar[2]} sem juros`;
+
+      // Cupom no checkout. Ex.: "economize mais 20% na finalizacao do pedido"
+      let cupom = 0;
+      const mCup = (promo + " " + centro).match(/economize\s+(?:mais\s+)?(\d{1,2})\s*%/i);
+      if (mCup) cupom = parseInt(mCup[1], 10);
+
+      // Produto importado com taxas ja pagas
+      const taxasIncluidas = /taxas de importa[çc][ãa]o j[áa] inclu[íi]das/i.test(centro);
+
+      return { paginaOk: true, freteGratis, prazo, estoqueBaixo, parcelas, cupom, taxasIncluidas };
     });
 
     return info.paginaOk ? info : null;
@@ -150,6 +187,26 @@ async function verificarNaPagina(client, asin) {
   } finally {
     if (page) { try { await page.close(); } catch { /* ignora */ } }
   }
+}
+
+// Monta as linhas extras (so o que foi REALMENTE lido na pagina) e insere
+// antes da linha do link, mantendo o link por ultimo.
+function montarLegenda(captionBase, extra) {
+  if (!extra) return captionBase;
+  const NL = String.fromCharCode(10);
+  const linhas = [];
+  if (extra.freteGratis) linhas.push("\u{1F69A} " + (extra.prazo || "Entrega GRÁTIS"));
+  else linhas.push("\u{1F69A} Mais frete");
+  if (extra.estoqueBaixo)  linhas.push("\u{1F4E6} " + extra.estoqueBaixo);
+  if (extra.cupom > 0)     linhas.push("\u{1F3AB} Economize mais " + extra.cupom + "% na finalização");
+  if (extra.parcelas)      linhas.push("\u{1F4B3} " + extra.parcelas);
+  if (extra.taxasIncluidas) linhas.push("\u{1F30E} Taxas de importação já incluídas");
+
+  const partes = captionBase.split(NL);
+  const iLink = partes.findIndex(l => l.includes("\u{1F517}"));
+  if (iLink === -1) return captionBase + NL + linhas.join(NL);
+  partes.splice(iLink, 0, ...linhas);   // extras antes do link
+  return partes.join(NL);
 }
 
 async function sendOffer(client) {
@@ -172,15 +229,11 @@ async function sendOffer(client) {
       try {
         // Confere na pagina real antes de enviar (frete/cupom verdadeiros)
         const extra = await verificarNaPagina(client, item.asin);
-        let legenda = item.caption;
+        const legenda = montarLegenda(item.caption, extra);
         if (extra) {
-          legenda += extra.freteGratis
-            ? "\n🚚 Entrega GRATIS"
-            : "\n🚚 Mais frete";
-          if (extra.cupom > 0) legenda += `\n🎫 Economize mais ${extra.cupom}% na finalizacao`;
-          console.log(`  verificado: frete_gratis=${extra.freteGratis} cupom=${extra.cupom}%`);
+          console.log(`  verificado: frete=${extra.freteGratis} cupom=${extra.cupom}% estoque="${extra.estoqueBaixo}"`);
         } else {
-          console.log("  (nao consegui ler a pagina - envio sem info de frete)");
+          console.log("  (nao consegui ler a pagina - envio sem infos extras)");
         }
 
         if (item.image) {
