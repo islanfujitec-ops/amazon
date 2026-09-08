@@ -627,18 +627,22 @@ async function buscarOfertasAmazon(config, opcoes = {}) {
   const limit = opcoes.limit || config.perBrand || 5;
   const jaEnviados = opcoes.ignorarEnviados ? {} : (config.sentAsins || {});
 
-  // Marcas primeiro (sao especificas de jogos; keywords genericas trazem ruido tipo
-  // "kit banheiro"). Quanto mais itens pedidos, mais marcas consultamos por rodada.
-  const marcas = config.brands || [];
-  const qtdTermos = Math.min(marcas.length, Math.max(6, Math.ceil(limit / 2)));
-  const giro = marcas.length ? (new Date().getHours() * qtdTermos) % marcas.length : 0;
-  const termos = [...marcas.slice(giro), ...marcas.slice(0, giro)].slice(0, qtdTermos);
+  // Consulta MARCAS e KEYWORDS que o usuario cadastrou.
+  // Marca leva o sufixo "jogo de tabuleiro" (senao "MARVEL" traz livro de colorir);
+  // keyword ja e um termo de categoria, entao vai como esta.
+  const marcas = (config.brands || []).map(m => `${m} jogo de tabuleiro`);
+  const chaves = config.keywords || [];
+  const todos = [...marcas, ...chaves];
+
+  // Rotaciona pela hora: cada rodada pega um pedaco, cobrindo a lista toda ao longo do dia.
+  const qtdTermos = Math.min(todos.length, Math.max(6, Math.ceil(limit / 2)));
+  const giro = todos.length ? (new Date().getHours() * qtdTermos) % todos.length : 0;
+  const termos = [...todos.slice(giro), ...todos.slice(0, giro)].slice(0, qtdTermos);
 
   const porAsin = new Map();
   for (const termo of termos) {
     try {
-      // "jogo de tabuleiro" no termo limita a categoria certa (searchIndex nao existe no BR)
-      const itens = await searchAmazonProducts(`${termo} jogo de tabuleiro`, 10);
+      const itens = await searchAmazonProducts(termo, 10);
       for (const item of itens) {
         // So entra oferta COMPLETA: precisa de ASIN, preco e link real da Amazon.
         // Sem isso nao serve pra divulgar, entao e descartada.
