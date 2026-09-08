@@ -154,10 +154,20 @@ async function verificarNaPagina(client, asin) {
 
       // Frete gratis + prazo. Ex.: "Entrega GRATIS 16 - 29 de Setembro. Ver detalhes"
       let freteGratis = false, prazo = "";
-      const mEnt = entrega.match(/(?:entrega|frete)\s+gr[aá]tis[^\n]{0,60}/i);
+      const mEnt = entrega.match(/(?:entrega|frete)\s+gr[aá]tis([^.]*)/i);
       if (mEnt) {
         freteGratis = true;
-        prazo = mEnt[0].replace(/\.?\s*Ver detalhes.*/i, "").replace(/\s+/g, " ").trim();
+        // A Amazon as vezes escreve "Entrega GRATIS <data> no seu primeiro pedido".
+        // Nesse caso o frete gratis e CONDICIONAL - precisa ficar explicito, senao engana
+        // quem ja e cliente. Guardamos so a data e marcamos a condicao.
+        const soPrimeiroPedido = /primeiro pedido/i.test(entrega);
+        let quando = mEnt[1]
+          .replace(/\s*no seu primeiro pedido.*/i, "")
+          .replace(/\s*ver detalhes.*/i, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (quando.length > 45) quando = quando.slice(0, 45).replace(/\s+\S*$/, "");  // corta em palavra inteira
+        prazo = "Entrega GRÁTIS" + (quando ? " " + quando : "") + (soPrimeiroPedido ? " (no 1º pedido)" : "");
       }
 
       // Estoque baixo (gera urgencia real). Ex.: "Somente 1 em estoque."
