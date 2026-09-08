@@ -57,7 +57,7 @@ function acharNavegador() {
 }
 
 // ===== CONFIG =====
-const APP_URL = process.env.APP_URL || "https://tabuleiro360.vercel.app";
+const APP_URL = process.env.APP_URL || "https://www.tabuleiro360.shop";
 const PULL_KEY = process.env.WA_PULL_KEY || "";
 // ==================
 
@@ -118,6 +118,40 @@ async function marcarEnviados(asins, titles, discounts, items) {
   } catch { /* ignora */ }
 }
 
+// Le a PAGINA REAL do produto no navegador que ja esta aberto (o mesmo do WhatsApp)
+// e confirma frete gratis / cupom de checkout. A Creators API nao expoe esses dados,
+// entao a unica forma verdadeira e ler a mesma pagina que o cliente vai ver.
+// Se nao conseguir ler, retorna null e a mensagem sai SEM afirmar nada (nunca inventa).
+async function verificarNaPagina(client, asin) {
+  let page;
+  try {
+    const browser = client.pupBrowser;
+    if (!browser) return null;
+
+    page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 900 });
+    await page.goto(`https://www.amazon.com.br/dp/${asin}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 25000
+    });
+
+    const info = await page.evaluate(() => {
+      const txt = document.body.innerText || "";
+      const freteGratis = /(entrega|frete)\s+gr[aá]tis/i.test(txt);
+      const m = txt.match(/economize\s+(?:mais\s+)?(\d{1,2})\s*%/i);
+      const cupom = m ? parseInt(m[1], 10) : 0;
+      const paginaOk = txt.length > 500 && !/Digite os caracteres|Sorry, we just need/i.test(txt);
+      return { freteGratis, cupom, paginaOk };
+    });
+
+    return info.paginaOk ? info : null;
+  } catch {
+    return null;   // qualquer falha: nao afirma nada
+  } finally {
+    if (page) { try { await page.close(); } catch { /* ignora */ } }
+  }
+}
+
 async function sendOffer(client) {
   try {
     const offer = await fetchOffer();
@@ -136,11 +170,24 @@ async function sendOffer(client) {
     // Uma mensagem por jogo: foto + legenda. Pausa entre elas pra nao parecer spam.
     for (const item of offer.offers) {
       try {
+        // Confere na pagina real antes de enviar (frete/cupom verdadeiros)
+        const extra = await verificarNaPagina(client, item.asin);
+        let legenda = item.caption;
+        if (extra) {
+          legenda += extra.freteGratis
+            ? "\n🚚 Entrega GRATIS"
+            : "\n🚚 Mais frete";
+          if (extra.cupom > 0) legenda += `\n🎫 Economize mais ${extra.cupom}% na finalizacao`;
+          console.log(`  verificado: frete_gratis=${extra.freteGratis} cupom=${extra.cupom}%`);
+        } else {
+          console.log("  (nao consegui ler a pagina - envio sem info de frete)");
+        }
+
         if (item.image) {
           const media = await MessageMedia.fromUrl(item.image, { unsafeMime: true });
-          await client.sendMessage(chatId, media, { caption: item.caption });
+          await client.sendMessage(chatId, media, { caption: legenda });
         } else {
-          await client.sendMessage(chatId, item.caption);
+          await client.sendMessage(chatId, legenda);
         }
         enviados.push(item.asin);
         titulos.push(item.title);
