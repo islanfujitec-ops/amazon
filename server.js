@@ -640,8 +640,15 @@ async function buscarOfertasAmazon(config, opcoes = {}) {
   const termos = [...todos.slice(giro), ...todos.slice(0, giro)].slice(0, qtdTermos);
 
   const porAsin = new Map();
+  // A Amazon permite 1 requisicao por SEGUNDO (8640/dia). O limite diario sobra
+  // (usamos ~2%), mas sem pausa as buscas saem juntas e batem no "rate limit exceeded".
+  const PAUSA_MS = 1100;
+  let primeira = true;
+
   for (const termo of termos) {
     try {
+      if (!primeira) await new Promise(r => setTimeout(r, PAUSA_MS));
+      primeira = false;
       const itens = await searchAmazonProducts(termo, 10);
       for (const item of itens) {
         // So entra oferta COMPLETA: precisa de ASIN, preco e link real da Amazon.
