@@ -15,6 +15,18 @@ const PORT = process.env.PORT || 3000;
 
 // URL base do app (pra montar links de rastreio de clique)
 const BASE_URL = process.env.BASE_URL || 'https://www.tabuleiro360.shop';
+// Data e hora SEMPRE no fuso de Brasilia. Na Vercel o servidor roda em UTC:
+// as 21h daqui la ja e o dia seguinte, e a vitrine do dia zerava 3h mais cedo.
+const FUSO = 'America/Sao_Paulo';
+function dataDeHoje() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: FUSO }).format(new Date()); // YYYY-MM-DD
+}
+function minutosDoDia() {
+  const hm = new Intl.DateTimeFormat('pt-BR', { timeZone: FUSO, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+  const [h, m] = hm.split(':').map(Number);
+  return h * 60 + m;
+}
+
 function trackUrl(target, label) {
   return `${BASE_URL}/r?to=${encodeURIComponent(target)}&label=${encodeURIComponent(label)}`;
 }
@@ -634,9 +646,10 @@ async function buscarOfertasAmazon(config, opcoes = {}) {
   const chaves = config.keywords || [];
   const todos = [...marcas, ...chaves];
 
-  // Rotaciona pela hora: cada rodada pega um pedaco, cobrindo a lista toda ao longo do dia.
+  // Rotaciona a cada 15 min: cada rodada pega um pedaco diferente da lista.
   const qtdTermos = Math.min(todos.length, Math.max(6, Math.ceil(limit / 2)));
-  const giro = todos.length ? (new Date().getHours() * qtdTermos) % todos.length : 0;
+  const bloco = Math.floor(minutosDoDia() / 15);   // muda a cada 15 min
+  const giro = todos.length ? (bloco * qtdTermos) % todos.length : 0;
   const termos = [...todos.slice(giro), ...todos.slice(0, giro)].slice(0, qtdTermos);
 
   const porAsin = new Map();
@@ -730,7 +743,7 @@ app.post('/api/mark-sent', async (req, res) => {
     const agora = Date.now();
 
     // Vitrine do dia: zera sozinha quando vira o dia (nao acumula lixo)
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = dataDeHoje();
     if (!config.today || config.today.date !== hoje) config.today = { date: hoje, offers: [] };
 
     asins.forEach((asin, idx) => {
@@ -764,7 +777,7 @@ app.post('/api/mark-sent', async (req, res) => {
 app.get('/api/today', async (req, res) => {
   try {
     const config = await loadConfig();
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = dataDeHoje();
     const t = config.today;
     if (!t || t.date !== hoje) return res.json({ date: hoje, offers: [] });
     res.json({ date: t.date, offers: t.offers || [] });
