@@ -703,6 +703,24 @@ function legendaOferta(p) {
 
 
 // 📤 O servidor Windows busca aqui as ofertas prontas (uma mensagem por jogo, com foto)
+// Config leve pro servidor Windows: so le o painel, NAO busca na Amazon.
+// (o loop consulta de minuto em minuto; se batesse no /pending-message
+//  gastaria 25 chamadas da Amazon por minuto = 36.000/dia, muito acima do limite)
+app.get('/api/send-config', async (req, res) => {
+  try {
+    const key = process.env.WA_PULL_KEY;
+    if (key && req.query.key !== key) return res.status(401).json({ error: 'chave inválida' });
+    const config = await loadConfig();
+    res.json({
+      target: config.whatsappNumber || '',
+      frequencyMinutes: config.frequency || 60,
+      autoSend: config.sendAlerts !== false
+    });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
 app.get('/api/pending-message', async (req, res) => {
   try {
     const key = process.env.WA_PULL_KEY;

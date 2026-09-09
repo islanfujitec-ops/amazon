@@ -64,9 +64,18 @@ const PULL_KEY = process.env.WA_PULL_KEY || "";
 let ready = false;
 let lastSent = 0;
 
+// Busca as ofertas: e uma chamada PESADA (o app consulta a Amazon, leva ~35s).
+// So chamar na hora de enviar de verdade.
 async function fetchOffer() {
   const url = `${APP_URL}/api/pending-message${PULL_KEY ? "?key=" + encodeURIComponent(PULL_KEY) : ""}`;
-  const { data } = await axios.get(url, { timeout: 20000 });
+  const { data } = await axios.get(url, { timeout: 90000 });
+  return data;
+}
+
+// Config do painel: leve e rapida, e o que o loop olha de minuto em minuto.
+async function fetchSendConfig() {
+  const url = `${APP_URL}/api/send-config${PULL_KEY ? "?key=" + encodeURIComponent(PULL_KEY) : ""}`;
+  const { data } = await axios.get(url, { timeout: 15000 });
   return data;
 }
 
@@ -276,8 +285,8 @@ async function sendOffer(client) {
 async function loop(client) {
   try {
     await sendHeartbeat();
-    const offer = await fetchOffer().catch(() => null);
-    const freq = offer && offer.frequencyMinutes ? offer.frequencyMinutes : 60;
+    const cfg = await fetchSendConfig().catch(() => null);
+    const freq = cfg && cfg.frequencyMinutes ? cfg.frequencyMinutes : 60;
     const elapsedMin = (Date.now() - lastSent) / 60000;
     if (ready && elapsedMin >= freq) {
       await sendOffer(client);
