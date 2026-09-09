@@ -356,5 +356,56 @@ client.on("disconnected", (r) => {
   setTimeout(() => client.initialize().catch((e) => console.error(e.message)), 5000);
 });
 
-client.initialize().catch((e) => console.error("Erro ao iniciar:", e.message));
+// Fechar a janela no X mata o Node mas deixa o Chrome vivo segurando a pasta da
+// sessao. Na proxima vez dava "The browser is already running". Aqui: se der esse
+// erro, apaga o cadeado (Singleton*) e tenta de novo. A sessao NAO se perde.
+function limparCadeado() {
+  const dir = path.join(__dirname, "data", ".wwebjs_auth", "session");
+  let apagou = 0;
+  try {
+    for (const f of fs.readdirSync(dir)) {
+      if (f.startsWith("Singleton")) {
+        try { fs.rmSync(path.join(dir, f), { force: true, recursive: true }); apagou++; } catch { /* ignora */ }
+      }
+    }
+  } catch { /* pasta ainda nao existe */ }
+  return apagou;
+}
+
+async function iniciar() {
+  try {
+    await client.initialize();
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    if (/already running/i.test(msg)) {
+      console.log("[WhatsApp] Sobrou um navegador da execucao anterior. Limpando o cadeado...");
+      const n = limparCadeado();
+      console.log(`[WhatsApp] ${n} arquivo(s) de cadeado removido(s). Tentando de novo...`);
+      try {
+        await client.initialize();
+        return;
+      } catch (e2) {
+        console.error("Erro ao iniciar:", e2.message);
+        console.error("  -> Feche as janelas do INICIAR.bat e encerre o chrome.exe do TABULEIRO360 no Gerenciador de Tarefas.");
+        return;
+      }
+    }
+    console.error("Erro ao iniciar:", msg);
+  }
+}
+
+// Ctrl+C / fechar a janela: encerra o navegador junto (evita o orfao de novo)
+let encerrando = false;
+async function encerrar() {
+  if (encerrando) return;
+  encerrando = true;
+  console.log("\nEncerrando... fechando o navegador.");
+  try { await client.destroy(); } catch { /* ignora */ }
+  process.exit(0);
+}
+process.on("SIGINT", encerrar);
+process.on("SIGTERM", encerrar);
+process.on("SIGHUP", encerrar);
+
+iniciar();
 loop(client);
