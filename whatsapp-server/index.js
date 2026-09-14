@@ -4,6 +4,7 @@
 // Conecta por QR, e no intervalo configurado busca as ofertas no app e envia no grupo/número.
 
 import fs from "node:fs";
+import { execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import qrcode from "qrcode-terminal";
@@ -296,6 +297,7 @@ async function loop(client) {
 }
 
 console.log("=== TABULEIRO360 - Enviador de WhatsApp (whatsapp-web.js) ===");
+console.log("Versao do script: 14/09 (fecha navegador que sobrou sozinho)");
 console.log("App:", APP_URL);
 
 const navegador = acharNavegador();
@@ -357,40 +359,63 @@ client.on("disconnected", (r) => {
 });
 
 // Fechar a janela no X mata o Node mas deixa o Chrome vivo segurando a pasta da
-// sessao. Na proxima vez dava "The browser is already running". Aqui: se der esse
-// erro, apaga o cadeado (Singleton*) e tenta de novo. A sessao NAO se perde.
-function limparCadeado() {
-  const dir = path.join(__dirname, "data", ".wwebjs_auth", "session");
-  let apagou = 0;
+// sessao -> "The browser is already running". No Windows o cadeado e o proprio
+// processo do Chrome, entao ANTES de iniciar fechamos o Chrome que usa ESTA pasta
+// (so ele: o Chrome normal do servidor nao e tocado). A sessao NAO se perde.
+const PASTA_SESSAO = path.join(__dirname, "data", ".wwebjs_auth");
+
+function fecharNavegadorOrfao() {
+  if (process.platform !== "win32") return 0;
+  const ps =
+    `$ProgressPreference = 'SilentlyContinue'; $d = '${PASTA_SESSAO.replace(/'/g, "''")}'.ToLower(); $n = 0; ` +
+    `Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'" | ` +
+    `Where-Object { $_.CommandLine -and $_.CommandLine.ToLower().Contains($d) } | ` +
+    `ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $n++ }; $n`;
+  try {
+    const cmd = Buffer.from(ps, "utf16le").toString("base64");
+    const out = execSync(`powershell -NoProfile -NonInteractive -EncodedCommand ${cmd}`, { encoding: "utf8", timeout: 30000, stdio: ["ignore", "pipe", "ignore"] });
+    return parseInt(String(out).trim().split(/\s+/).pop(), 10) || 0;
+  } catch (e) {
+    console.log("[WhatsApp] Nao consegui checar navegador antigo:", e.message.split("\n")[0]);
+    return 0;
+  }
+}
+
+function apagarCadeados() {
+  const dir = path.join(PASTA_SESSAO, "session");
   try {
     for (const f of fs.readdirSync(dir)) {
-      if (f.startsWith("Singleton")) {
-        try { fs.rmSync(path.join(dir, f), { force: true, recursive: true }); apagou++; } catch { /* ignora */ }
+      if (f === "lockfile" || f.startsWith("Singleton")) {
+        try { fs.rmSync(path.join(dir, f), { force: true, recursive: true }); } catch { /* ignora */ }
       }
     }
   } catch { /* pasta ainda nao existe */ }
-  return apagou;
 }
 
 async function iniciar() {
-  try {
-    await client.initialize();
-  } catch (e) {
-    const msg = e && e.message ? e.message : String(e);
-    if (/already running/i.test(msg)) {
-      console.log("[WhatsApp] Sobrou um navegador da execucao anterior. Limpando o cadeado...");
-      const n = limparCadeado();
-      console.log(`[WhatsApp] ${n} arquivo(s) de cadeado removido(s). Tentando de novo...`);
-      try {
-        await client.initialize();
-        return;
-      } catch (e2) {
-        console.error("Erro ao iniciar:", e2.message);
-        console.error("  -> Feche as janelas do INICIAR.bat e encerre o chrome.exe do TABULEIRO360 no Gerenciador de Tarefas.");
-        return;
-      }
+  for (let tentativa = 1; tentativa <= 2; tentativa++) {
+    const n = fecharNavegadorOrfao();
+    if (n) {
+      console.log(`[WhatsApp] Fechei ${n} processo(s) do navegador que sobrou da execucao anterior.`);
+      await new Promise(r => setTimeout(r, 3000));   // espera o Windows soltar a pasta
     }
-    console.error("Erro ao iniciar:", msg);
+    apagarCadeados();
+    try {
+      await client.initialize();
+      return;
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e);
+      if (tentativa === 1 && /already running/i.test(msg)) {
+        console.log("[WhatsApp] Navegador ainda preso. Tentando de novo...");
+        await new Promise(r => setTimeout(r, 3000));
+        continue;
+      }
+      console.error("Erro ao iniciar:", msg);
+      if (/already running/i.test(msg)) {
+        console.error("  -> Abra o Gerenciador de Tarefas, finalize TODOS os 'Google Chrome' e 'Node.js' e rode o INICIAR.bat de novo.");
+      }
+      return;
+    }
   }
 }
 
