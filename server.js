@@ -5,7 +5,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { searchAmazonProducts, getProductByASIN, debugApi } = require('./lib/amazonApi');
+const { searchAmazonProducts, getProductByASIN, getItemsByASINs, debugApi } = require('./lib/amazonApi');
 const { buildSearchUrl, buildOfferUrl } = require('./lib/amazonLinks');
 const { sendViaEvolution, getEvolutionStatus, isEvolutionConfigured } = require('./lib/whatsappSender');
 const { fetchComparaJogos, fetchPriceReductions } = require('./lib/comparaJogos');
@@ -112,6 +112,54 @@ app.post('/api/add-keyword', async (req, res) => {
   } else {
     res.json({ success: false, error: 'Keyword inválida ou já existe' });
   }
+});
+
+// 🔗 PRODUTOS ESPECIFICOS: cola o link da Amazon e o sistema vigia esse produto.
+// Aceita /dp/ASIN, /gp/product/ASIN, link com parametros e link curto (amzn.to / a.co).
+async function extrairAsin(texto) {
+  let url = String(texto || '').trim();
+  if (/^[A-Z0-9]{10}$/i.test(url)) return url.toUpperCase();
+  // link curto: segue o redirecionamento ate a pagina do produto
+  if (/^https?:\/\/(amzn\.to|a\.co|amzn\.eu)\//i.test(url)) {
+    try {
+      const r = await axios.get(url, { maxRedirects: 5, timeout: 10000, validateStatus: () => true,
+        headers: { 'User-Agent': 'Mozilla/5.0' } });
+      url = r.request?.res?.responseUrl || url;
+    } catch { /* cai na regex abaixo */ }
+  }
+  const m = url.match(/\/(?:dp|gp\/product|gp\/aw\/d|product)\/([A-Z0-9]{10})(?=[\/?#&]|$)/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
+app.post('/api/add-product', async (req, res) => {
+  try {
+    const asin = await extrairAsin(req.body.url);
+    if (!asin) return res.json({ success: false, error: 'Não achei o código do produto nesse link. Cole o link da página do produto na Amazon.' });
+
+    const config = await loadConfig();
+    config.watchProducts = config.watchProducts || [];
+    if (config.watchProducts.some(p => p.asin === asin)) {
+      return res.json({ success: false, error: 'Esse produto já está na lista.' });
+    }
+
+    // So cadastra se a Amazon confirmar que o produto existe (nada inventado)
+    const [real] = await getItemsByASINs([asin]);
+    if (!real) return res.json({ success: false, error: `A Amazon não retornou o produto ${asin}. Confira o link.` });
+
+    config.watchProducts.push({ asin, title: real.title, addedAt: Date.now() });
+    await saveConfig(config);
+    res.json({ success: true, product: { asin, title: real.title, price: real.price, discount: real.discount } });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/remove-product', async (req, res) => {
+  const config = await loadConfig();
+  const asin = String(req.body.asin || '').toUpperCase();
+  config.watchProducts = (config.watchProducts || []).filter(p => p.asin !== asin);
+  await saveConfig(config);
+  res.json({ success: true, watchProducts: config.watchProducts });
 });
 
 // Remover keyword
@@ -670,6 +718,21 @@ async function buscarOfertasAmazon(config, opcoes = {}) {
       }
     } catch (e) {
       console.error(`Erro buscando "${termo}":`, e.message);
+    }
+  }
+
+  // Produtos colados por link: consultados TODA rodada (10 por chamada)
+  const vigiados = (config.watchProducts || []).map(p => p.asin);
+  for (let i = 0; i < vigiados.length; i += 10) {
+    try {
+      if (!primeira) await new Promise(r => setTimeout(r, PAUSA_MS));
+      primeira = false;
+      const itens = await getItemsByASINs(vigiados.slice(i, i + 10));
+      for (const item of itens) {
+        if (item.asin && item.price && item.affiliate_url) porAsin.set(item.asin, item);
+      }
+    } catch (e) {
+      console.error('Erro buscando produtos vigiados:', e.message);
     }
   }
 

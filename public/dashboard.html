@@ -188,6 +188,14 @@
                     </div>
                 </div>
 
+                <div style="margin-bottom: 30px;">
+                    <h3>🔗 Produtos Vigiados (link da Amazon)</h3>
+                    <p style="color:#666; margin-bottom:10px;">Produtos específicos que você quer acompanhar. São consultados em <strong>toda rodada</strong> e enviados quando entrarem em promoção (mesmas regras: desconto mínimo e sem repetir).</p>
+                    <div id="productsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                        <p>Nenhum produto vigiado ainda.</p>
+                    </div>
+                </div>
+
                 <div style="margin-top: 30px;">
                     <h3>✏️ Adicionar Nova Marca</h3>
                     <div class="form-group">
@@ -202,6 +210,14 @@
                         <input type="text" id="newKeyword" placeholder="Digite a palavra-chave">
                     </div>
                     <button class="btn btn-primary" onclick="addKeyword()">➕ Adicionar Keyword</button>
+                </div>
+
+                <div style="margin-top: 30px;">
+                    <h3>✏️ Adicionar Produto por Link</h3>
+                    <div class="form-group">
+                        <input type="text" id="newProduct" placeholder="Cole o link do produto na Amazon (amazon.com.br/... ou amzn.to/...)">
+                    </div>
+                    <button class="btn btn-primary" id="btnAddProduct" onclick="addProduct()">➕ Adicionar Produto</button>
                 </div>
             </div>
 
@@ -312,6 +328,20 @@
                             </div>`;
                         });
                         document.getElementById('brandsList').innerHTML = html;
+                    }
+
+                    // Carregar produtos vigiados
+                    const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+                    if (data.watchProducts && data.watchProducts.length > 0) {
+                        let html = '';
+                        data.watchProducts.forEach(p => {
+                            html += `<div class="info-box" style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                                <div style="min-width:0;"><strong>${esc(p.title)}</strong><br>
+                                <a href="https://www.amazon.com.br/dp/${p.asin}" target="_blank" rel="noopener" style="font-size:0.85em;">${p.asin}</a></div>
+                                <button class="btn btn-danger" style="padding: 5px 10px; font-size: 0.9em; flex-shrink:0;" onclick="removeProduct('${p.asin}')">🗑️ Remover</button>
+                            </div>`;
+                        });
+                        document.getElementById('productsList').innerHTML = html;
                     }
 
                     // Carregar keywords
@@ -499,6 +529,42 @@
                         location.reload();
                     }
                 });
+            }
+        }
+
+        function addProduct() {
+            const url = document.getElementById('newProduct').value.trim();
+            if (!url) { alert('❌ Cole o link do produto'); return; }
+            const btn = document.getElementById('btnAddProduct');
+            btn.disabled = true; btn.textContent = '⏳ Conferindo na Amazon...';
+            fetch('/api/add-product', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const p = data.product;
+                    alert(`✅ Produto adicionado!\n\n${p.title}\nPreço agora: ${p.price || '—'}${p.discount ? ' (' + p.discount + '% OFF)' : ''}`);
+                    location.reload();
+                } else {
+                    alert('❌ ' + data.error);
+                }
+            })
+            .catch(e => alert('❌ ' + e.message))
+            .finally(() => { btn.disabled = false; btn.textContent = '➕ Adicionar Produto'; });
+        }
+
+        function removeProduct(asin) {
+            if (confirm(`Remover o produto ${asin} da lista?`)) {
+                fetch('/api/remove-product', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ asin })
+                })
+                .then(r => r.json())
+                .then(data => { if (data.success) { alert('✅ Produto removido!'); location.reload(); } });
             }
         }
 
