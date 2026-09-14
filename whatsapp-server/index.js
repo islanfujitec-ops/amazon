@@ -297,7 +297,7 @@ async function loop(client) {
 }
 
 console.log("=== TABULEIRO360 - Enviador de WhatsApp (whatsapp-web.js) ===");
-console.log("Versao do script: 14/09 (fecha navegador que sobrou sozinho)");
+console.log("Versao do script: 14/09-B (QR novo automatico apos logout)");
 console.log("App:", APP_URL);
 
 const navegador = acharNavegador();
@@ -307,18 +307,25 @@ if (navegador) {
   console.log("[WhatsApp] AVISO: nenhum navegador encontrado. Instale o Google Chrome (https://www.google.com/chrome) e rode de novo.");
 }
 
+// Versao do WhatsApp Web: sem fixar da "Execution context was destroyed"; fixa no
+// codigo expira (a 2.3000.1027913442 sumiu -> 404 e o QR nao aparecia). Entao a
+// cada partida pega a versao ATUAL da lista do wa-version; se falhar, usa a reserva.
+const WA_REPO = "https://raw.githubusercontent.com/wppconnect-team/wa-version/main";
+let versaoWa = "2.3000.1047447330-alpha";   // reserva (valida ate 14/11/2026)
+try {
+  const { data } = await axios.get(`${WA_REPO}/versions.json`, { timeout: 10000 });
+  if (data && data.currentVersion) versaoWa = data.currentVersion;
+} catch { /* usa a reserva */ }
+console.log("[WhatsApp] Versao do WhatsApp Web:", versaoWa);
+
 const client = new Client({
+  webVersion: versaoWa,
+  webVersionCache: { type: "remote", remotePath: `${WA_REPO}/html/{version}.html` },
   authStrategy: new LocalAuth({ dataPath: path.join(__dirname, "data", ".wwebjs_auth") }),
   puppeteer: {
     headless: true,
     executablePath: navegador, // usa um navegador já instalado (não baixa)
     args: ["--no-sandbox", "--disable-setuid-sandbox"]
-  },
-  // Corrige "Execution context was destroyed": fixa uma versao conhecida do WhatsApp Web,
-  // senao a lib tenta injetar numa versao nova que ela ainda nao suporta.
-  webVersionCache: {
-    type: "remote",
-    remotePath: "https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1027913442.html"
   }
 });
 
@@ -352,10 +359,37 @@ client.on("ready", () => {
   setTimeout(() => sendOffer(client), 5000); // envia uma vez ao conectar
 });
 
-client.on("disconnected", (r) => {
+// Desconectou (ex.: LOGOUT pelo celular). Religar no mesmo navegador dava
+// "already running", e a lib tenta apagar a sessao com o Chrome aberto -> EBUSY
+// e o programa caia. Agora: marca "precisa de QR novo", fecha tudo e sai com
+// codigo 3; o INICIAR.bat reabre e, na partida, a sessao morta e apagada.
+const MARCA_NOVO_QR = path.join(__dirname, "data", "PRECISA_NOVO_QR");
+
+async function reiniciarLimpo(motivo, apagarSessao) {
+  if (reiniciando) return;
+  reiniciando = true;
   ready = false;
-  console.error("[WhatsApp] Desconectado:", r, "- reiniciando...");
-  setTimeout(() => client.initialize().catch((e) => console.error(e.message)), 5000);
+  console.log(`[WhatsApp] ${motivo} - reiniciando limpo em alguns segundos...`);
+  if (apagarSessao) {
+    try { fs.mkdirSync(path.dirname(MARCA_NOVO_QR), { recursive: true }); fs.writeFileSync(MARCA_NOVO_QR, String(Date.now())); } catch { /* ignora */ }
+  }
+  try { await Promise.race([client.destroy(), new Promise(r => setTimeout(r, 8000))]); } catch { /* ignora */ }
+  fecharNavegadorOrfao();
+  setTimeout(() => process.exit(3), 2000);
+}
+let reiniciando = false;
+
+client.on("disconnected", (r) => {
+  const logout = /LOGOUT|UNPAIRED/i.test(String(r));
+  reiniciarLimpo(logout ? "WhatsApp deslogado pelo celular (vai pedir QR novo)" : `Desconectado (${r})`, logout);
+});
+
+// A lib apaga a sessao sozinha no LOGOUT e no Windows isso estoura EBUSY.
+// Nao deixa o programa cair: trata como "precisa de QR novo".
+process.on("unhandledRejection", (e) => {
+  const msg = e && e.message ? e.message : String(e);
+  if (/EBUSY|already running|LOGOUT/i.test(msg)) return reiniciarLimpo("Sessao presa", true);
+  console.error("Erro nao tratado:", msg);
 });
 
 // Fechar a janela no X mata o Node mas deixa o Chrome vivo segurando a pasta da
@@ -392,7 +426,25 @@ function apagarCadeados() {
   } catch { /* pasta ainda nao existe */ }
 }
 
+async function apagarSessaoMorta() {
+  if (!fs.existsSync(MARCA_NOVO_QR)) return;
+  console.log("[WhatsApp] Apagando a sessao antiga (foi deslogada)...");
+  fecharNavegadorOrfao();
+  for (let i = 1; i <= 6; i++) {
+    try {
+      fs.rmSync(PASTA_SESSAO, { recursive: true, force: true });
+      fs.rmSync(MARCA_NOVO_QR, { force: true });
+      console.log("[WhatsApp] Sessao antiga apagada. O QR Code vai aparecer.");
+      return;
+    } catch {
+      await new Promise(r => setTimeout(r, 2000));   // Windows ainda soltando os arquivos
+    }
+  }
+  console.error("[WhatsApp] Nao consegui apagar a pasta data\.wwebjs_auth. Feche o Chrome no Gerenciador de Tarefas e apague a pasta manualmente.");
+}
+
 async function iniciar() {
+  await apagarSessaoMorta();
   for (let tentativa = 1; tentativa <= 2; tentativa++) {
     const n = fecharNavegadorOrfao();
     if (n) {

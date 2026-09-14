@@ -36,9 +36,21 @@ if not exist "node_modules\whatsapp-web.js" (
     echo.
 )
 
+REM Mantem a whatsapp-web.js atualizada (versao velha = QR nao aparece)
+echo Atualizando whatsapp-web.js...
+call npm install whatsapp-web.js@latest --no-fund --no-audit --loglevel=error
+echo.
+
 echo [2/2] Iniciando... escaneie o QR Code quando aparecer.
 echo.
+:rodar
 node index.js
+if "%errorlevel%"=="3" (
+    echo.
+    echo Reabrindo em 5 segundos...
+    timeout /t 5 /nobreak >nul
+    goto rodar
+)
 
 echo.
 echo O programa parou. Pressione uma tecla para fechar.
