@@ -297,7 +297,7 @@ async function loop(client) {
 }
 
 console.log("=== TABULEIRO360 - Enviador de WhatsApp (whatsapp-web.js) ===");
-console.log("Versao do script: 14/09-B (QR novo automatico apos logout)");
+console.log("Versao do script: 14/09-C (biblioteca corrigida + reinicio automatico)");
 console.log("App:", APP_URL);
 
 const navegador = acharNavegador();
@@ -339,15 +339,17 @@ client.on("loading_screen", (pct, msg) => console.log(`[WhatsApp] Carregando ${p
 client.on("change_state", (st) => console.log("[WhatsApp] Estado:", st));
 client.on("authenticated", () => console.log("[WhatsApp] Autenticado."));
 
-// Se em 90s nao apareceu QR nem conectou, avisa o que fazer (evita ficar no escuro)
+// Vigia: se em 2 min nao apareceu QR nem conectou, reinicia limpo sozinho
+// (o INICIAR.bat reabre). Evita ficar parado sem ninguem ver.
+let qrMostrado = false;
+client.on("qr", () => { qrMostrado = true; });
 const watchdog = setTimeout(() => {
-  if (!ready) {
-    console.log("[WhatsApp] AINDA SEM RESPOSTA apos 90s. O que tentar:");
-    console.log("  1) Apague a pasta data\.wwebjs_auth e rode de novo (sessao corrompida)");
-    console.log("  2) Instale o Google Chrome no servidor");
-    console.log("  3) Confira se o servidor acessa web.whatsapp.com");
+  if (!ready && !qrMostrado) {
+    console.log("[WhatsApp] Sem QR e sem conexao apos 2 minutos.");
+    console.log("  Se repetir sempre: confira se o servidor abre https://web.whatsapp.com no Chrome.");
+    reiniciarLimpo("Tentando de novo do zero", false);
   }
-}, 90000);
+}, 120000);
 
 client.on("auth_failure", (m) => console.error("[WhatsApp] Falha de autenticação:", m));
 
@@ -461,6 +463,13 @@ async function iniciar() {
         console.log("[WhatsApp] Navegador ainda preso. Tentando de novo...");
         await new Promise(r => setTimeout(r, 3000));
         continue;
+      }
+      // A pagina do WhatsApp recarregou no meio da carga. Nao e fatal: a biblioteca
+      // (versao corrigida) reinjeta sozinha quando a pagina termina de carregar.
+      // Se mesmo assim o QR nao vier, o vigia abaixo reinicia tudo limpo.
+      if (/Execution context was destroyed|most likely because of a navigation/i.test(msg)) {
+        console.log("[WhatsApp] A pagina do WhatsApp recarregou durante a carga. Aguardando o QR...");
+        return;
       }
       console.error("Erro ao iniciar:", msg);
       if (/already running/i.test(msg)) {

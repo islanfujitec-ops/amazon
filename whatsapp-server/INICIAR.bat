@@ -36,9 +36,10 @@ if not exist "node_modules\whatsapp-web.js" (
     echo.
 )
 
-REM Mantem a whatsapp-web.js atualizada (versao velha = QR nao aparece)
-echo Atualizando whatsapp-web.js...
-call npm install whatsapp-web.js@latest --no-fund --no-audit --loglevel=error
+REM whatsapp-web.js da versao CORRIGIDA (commit fixo do GitHub). A 1.34.7 do npm
+REM cai com "Execution context was destroyed" quando o WhatsApp recarrega a pagina.
+echo Instalando a versao corrigida do whatsapp-web.js...
+call npm install "whatsapp-web.js@https://codeload.github.com/wwebjs/whatsapp-web.js/tar.gz/942d236a11ad68807308b058303ba5256915979c" --no-fund --no-audit --no-update-notifier --loglevel=error
 echo.
 
 echo [2/2] Iniciando... escaneie o QR Code quando aparecer.
