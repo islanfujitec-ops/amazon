@@ -124,8 +124,12 @@ async function resolverChatId(client, alvo) {
 // Avisa o site o que ja foi enviado (pra nunca repetir)
 async function marcarEnviados(asins, titles, discounts, items) {
   try {
-    await axios.post(`${APP_URL}/api/mark-sent`, { asins, titles, discounts, items }, { timeout: 15000 });
-  } catch { /* ignora */ }
+    await axios.post(`${APP_URL}/api/mark-sent`, { asins, titles, discounts, items }, { timeout: 20000 });
+    return true;
+  } catch (e) {
+    console.log("  ATENCAO: nao consegui marcar como enviado:", e.message);
+    return false;   // se nao marcou, o app ainda acha que e novidade -> pode repetir
+  }
 }
 
 // Le a PAGINA REAL do produto no navegador que ja esta aberto (o mesmo do WhatsApp)
@@ -229,7 +233,14 @@ function montarLegenda(captionBase, extra) {
   return partes.join(NL);
 }
 
+let enviando = false;
+
 async function sendOffer(client) {
+  if (enviando) {
+    console.log("[WhatsApp] Envio anterior ainda em andamento - pulando esta vez (evita mensagem repetida).");
+    return;
+  }
+  enviando = true;
   try {
     const offer = await fetchOffer();
     if (!offer) { console.log("Sem resposta do app."); return; }
@@ -242,7 +253,7 @@ async function sendOffer(client) {
     }
 
     const chatId = await resolverChatId(client, offer.target);
-    const enviados = [], titulos = [], descontos = [], detalhes = [];
+    const enviados = [];
 
     // Uma mensagem por jogo: foto + legenda. Pausa entre elas pra nao parecer spam.
     for (const item of offer.offers) {
@@ -263,23 +274,31 @@ async function sendOffer(client) {
           await client.sendMessage(chatId, legenda);
         }
         enviados.push(item.asin);
-        titulos.push(item.title);
-        descontos.push(item.discount || 0);
-        detalhes.push({ price: item.price, oldPrice: item.oldPrice, image: item.image });
+        // Marca JA, um por um. Antes marcava so no fim: se a janela caisse no meio
+        // do envio, nada era marcado e tudo era enviado de novo na rodada seguinte.
+        await marcarEnviados([item.asin], [item.title], [item.discount || 0],
+          [{ price: item.price, oldPrice: item.oldPrice, image: item.image }]);
         console.log(`  enviado: ${item.title.slice(0, 55)}`);
         await new Promise(r => setTimeout(r, 4000));
       } catch (e) {
+        // A mensagem pode ter chegado no grupo mesmo com erro na confirmacao
+        // (acontece com foto). Marcamos assim mesmo: repetir todo ciclo e pior
+        // do que perder uma oferta.
         console.log(`  falhou (${item.title.slice(0, 35)}): ${e.message}`);
+        console.log("  -> marcando como enviado mesmo assim, pra nao repetir toda rodada");
+        await marcarEnviados([item.asin], [item.title], [item.discount || 0],
+          [{ price: item.price, oldPrice: item.oldPrice, image: item.image }]);
       }
     }
 
     if (enviados.length) {
-      await marcarEnviados(enviados, titulos, descontos, detalhes);
       lastSent = Date.now();
       console.log(`[${new Date().toLocaleString("pt-BR")}] ${enviados.length} ofertas enviadas para ${offer.target}`);
     }
   } catch (e) {
     console.log("Erro ao enviar:", e.message);
+  } finally {
+    enviando = false;
   }
 }
 
@@ -297,7 +316,7 @@ async function loop(client) {
 }
 
 console.log("=== TABULEIRO360 - Enviador de WhatsApp (whatsapp-web.js) ===");
-console.log("Versao do script: 14/09-C (biblioteca corrigida + reinicio automatico)");
+console.log("Versao do script: 15/09 (sem repetir: marca 1 a 1 e trava janela dupla)");
 console.log("App:", APP_URL);
 
 const navegador = acharNavegador();
@@ -377,6 +396,7 @@ async function reiniciarLimpo(motivo, apagarSessao) {
   }
   try { await Promise.race([client.destroy(), new Promise(r => setTimeout(r, 8000))]); } catch { /* ignora */ }
   fecharNavegadorOrfao();
+  soltarTrava();
   setTimeout(() => process.exit(3), 2000);
 }
 let reiniciando = false;
@@ -445,7 +465,45 @@ async function apagarSessaoMorta() {
   console.error("[WhatsApp] Nao consegui apagar a pasta data\.wwebjs_auth. Feche o Chrome no Gerenciador de Tarefas e apague a pasta manualmente.");
 }
 
+// Duas janelas do INICIAR.bat abertas = tudo enviado em dobro. Guarda o numero do
+// processo num arquivo; se o dono ainda estiver vivo, esta janela nao envia nada.
+const ARQ_TRAVA = path.join(__dirname, "data", "RODANDO.pid");
+
+function processoVivo(pid) {
+  if (process.platform !== "win32") return false;
+  try {
+    const out = execSync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    return /node\.exe/i.test(out);
+  } catch { return false; }
+}
+
+function pegarTrava() {
+  try {
+    fs.mkdirSync(path.dirname(ARQ_TRAVA), { recursive: true });
+    if (fs.existsSync(ARQ_TRAVA)) {
+      const dono = parseInt(fs.readFileSync(ARQ_TRAVA, "utf8").trim(), 10);
+      if (dono && dono !== process.pid && processoVivo(dono)) {
+        console.log("\n[WhatsApp] JA EXISTE UMA JANELA DESTE PROGRAMA RODANDO (processo " + dono + ").");
+        console.log("   Duas janelas abertas mandam tudo em DOBRO no grupo.");
+        console.log("   Esta janela vai fechar. Use a que ja estava aberta.\n");
+        return false;
+      }
+    }
+    fs.writeFileSync(ARQ_TRAVA, String(process.pid));
+    return true;
+  } catch { return true; }   // na duvida, deixa rodar
+}
+
+function soltarTrava() {
+  try {
+    if (fs.existsSync(ARQ_TRAVA) && fs.readFileSync(ARQ_TRAVA, "utf8").trim() === String(process.pid)) {
+      fs.rmSync(ARQ_TRAVA, { force: true });
+    }
+  } catch { /* ignora */ }
+}
+
 async function iniciar() {
+  if (!pegarTrava()) { setTimeout(() => process.exit(0), 8000); return; }
   await apagarSessaoMorta();
   for (let tentativa = 1; tentativa <= 2; tentativa++) {
     const n = fecharNavegadorOrfao();
@@ -486,6 +544,7 @@ async function encerrar() {
   if (encerrando) return;
   encerrando = true;
   console.log("\nEncerrando... fechando o navegador.");
+  soltarTrava();
   try { await client.destroy(); } catch { /* ignora */ }
   process.exit(0);
 }

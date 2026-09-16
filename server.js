@@ -682,6 +682,10 @@ app.get('/api/best-prices', async (req, res) => {
 // configurado (desconto REAL da Amazon) e monta o link direto do produto com a tag.
 // ponytail: limita a 6 termos por rodada pra nao estourar rate limit; se precisar de
 // mais cobertura, rotacionar os termos entre execucoes.
+// Quantos pontos o desconto precisa subir pra valer mandar o mesmo jogo de novo
+// (30% -> 35% manda; 30% -> 31% nao manda).
+const REENVIO_MIN_PONTOS = 5;
+
 async function buscarOfertasAmazon(config, opcoes = {}) {
   const minDiscount = config.minDiscount || 0;
   const limit = opcoes.limit || config.perBrand || 5;
@@ -747,7 +751,9 @@ async function buscarOfertasAmazon(config, opcoes = {}) {
       // Se ja foi enviado mas nao temos o desconto daquele envio, NAO repete.
       // (padrao seguro: sem essa guarda, um registro com 0% faria repetir pra sempre)
       if (!descAnterior) return false;
-      return p.discount > descAnterior;                           // so volta se baixou mais
+      // So volta se o desconto subiu DE VERDADE. Sem isso, uma variacao boba
+      // (30% -> 31%) trazia o mesmo jogo de volta toda rodada.
+      return p.discount >= descAnterior + REENVIO_MIN_PONTOS;
     })
     .sort((a, b) => b.discount - a.discount)
     .slice(0, limit);
